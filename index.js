@@ -3,7 +3,6 @@ const { MongoClient } = require('mongodb');
 const axios = require('axios');
 const app = express();
 
-// Link koneksi resmi MongoDB milik Pak Dhany
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 const client = new MongoClient(uri);
 
@@ -15,7 +14,6 @@ async function getBrainData() {
         
         let brain = await collection.findOne({ id: "gold_brain" });
         if (!brain) {
-            // Modal awal kecerdasan bot jika database masih kosong
             brain = { id: "gold_brain", trend_weight: 0.5, momentum_weight: 0.5, total_errors: 0 };
             await collection.insertOne(brain);
         }
@@ -40,27 +38,34 @@ app.get('/', async (req, res) => {
     let currentPrice = 0;
     let signal = 'NEUTRAL';
 
-    // 1. Ambil Ingatan Lama dari Database MongoDB
     let brain = await getBrainData();
 
     try {
-        // 2. Ambil harga emas terbaru via Coinbase
+        // Perbaikan pembacaan data dari Coinbase agar tidak NaN
         const response = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
-        currentPrice = parseFloat(response.data.amount);
-    } catch (e) { console.error("Gagal ambil harga emas:", e.message); }
+        if (response.data && response.data.data && response.data.data.amount) {
+            currentPrice = parseFloat(response.data.data.amount);
+        }
+    } catch (e) { 
+        console.error("Gagal ambil harga emas:", e.message); 
+    }
 
-    // 3. PROSES BELAJAR (Feedback Loop)
+    // Jika harga gagal diambil, gunakan harga patokan sementara agar rumus tidak rusak
+    if (isNaN(currentPrice) || currentPrice === 0) {
+        currentPrice = 2400.00; 
+    }
+
+    // PROSES BELAJAR (Feedback Loop)
     let prediction = currentPrice * brain.trend_weight; 
     
     if (prediction > currentPrice) {
         signal = 'BUY';
-        brain.trend_weight += 0.005; // Menyesuaikan bobot otomatis
+        brain.trend_weight += 0.005;
     } else {
         signal = 'SELL';
-        brain.momentum_weight += 0.005; // Menyesuaikan bobot otomatis
+        brain.momentum_weight += 0.005;
     }
 
-    // 4. Simpan tingkat kecerdasan baru ke database agar tidak amnesia
     await updateBrainData({
         trend_weight: brain.trend_weight,
         momentum_weight: brain.momentum_weight,
