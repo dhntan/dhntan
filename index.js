@@ -11,85 +11,47 @@ async function getBrainData() {
         await client.connect();
         const db = client.db('doomsday_bot');
         const collection = db.collection('brain_weights');
-        
         let brain = await collection.findOne({ id: "gold_brain" });
         if (!brain) {
-            brain = { id: "gold_brain", trend_weight: 0.5, momentum_weight: 0.5, total_errors: 0 };
+            brain = { id: "gold_brain", total_errors: 0 };
             await collection.insertOne(brain);
         }
         return brain;
     } catch (e) {
-        console.error("Gagal konek database:", e);
-        return { trend_weight: 0.5, momentum_weight: 0.5, total_errors: 0 };
+        return { total_errors: 0 };
     }
 }
 
-async function updateBrainData(newWeights) {
+async function incrementIteration() {
     try {
         const db = client.db('doomsday_bot');
         await db.collection('brain_weights').updateOne(
             { id: "gold_brain" },
-            { $set: newWeights }
+            { $inc: { total_errors: 1 } }
         );
-    } catch (e) { console.error("Gagal simpan ingatan:", e); }
+    } catch (e) { console.error(e); }
 }
 
+// Ambil harga asli lewat Coinbase yang sudah terbukti lancar
 app.get('/api/update', async (req, res) => {
     let currentPrice = 0;
-    let signal = 'NEUTRAL';
-    let signalColor = '#6b7280'; // Abu-abu default
     let brain = await getBrainData();
+    await incrementIteration();
 
     try {
-        // Kembali ke penarikan harga Coinbase awal yang sudah sukses
         const response = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         if (response.data && response.data.data && response.data.data.amount) {
             currentPrice = parseFloat(response.data.data.amount);
         }
-    } catch (e) { console.error(e.message); }
-
-    if (isNaN(currentPrice) || currentPrice === 0) { currentPrice = 2400.00; }
-
-    // === RUMUS DOOMSDAY UTAMA YANG DISESUAIKAN ===
-    // Menggunakan variabel kontrol database Bapak untuk menentukan ambang batas sinyal
-    let upperDoom = currentPrice * (1 + (brain.momentum_weight - 0.5)); 
-    let lowerDoom = currentPrice * (1 - (brain.trend_weight - 0.5));
-
-    // Eksekusi logika berdasarkan indikator Doomsday Bapak
-    if (currentPrice > upperDoom) {
-        signal = 'DOOM SELL 🟠';
-        signalColor = '#f97316'; // Orange
-        brain.momentum_weight += 0.005; // Menyesuaikan bobot otomatis
-    } else if (currentPrice < lowerDoom) {
-        signal = 'DOOM BUY 🔵';
-        signalColor = '#3b82f6'; // Blue
-        brain.trend_weight += 0.005; // Menyesuaikan bobot otomatis
-    } else {
-        // Sinyal tren standar berdasar kalkulasi bobot saat ini
-        if (brain.trend_weight > brain.momentum_weight) {
-            signal = 'BUY 🟢';
-            signalColor = '#10b981'; // Hijau
-        } else {
-            signal = 'SELL 🔴';
-            signalColor = '#ef4444'; // Merah
-        }
+    } catch (e) { 
+        console.error(e.message); 
     }
-
-    await updateBrainData({
-        trend_weight: brain.trend_weight,
-        momentum_weight: brain.momentum_weight,
-        total_errors: brain.total_errors + 1
-    });
 
     const timeNow = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' });
 
     res.json({
-        price: currentPrice.toFixed(2),
-        signal: signal,
-        color: signalColor,
+        price: currentPrice > 0 ? currentPrice.toFixed(2) : "0.00",
         time: timeNow,
-        trend: brain.trend_weight.toFixed(4),
-        momentum: brain.momentum_weight.toFixed(4),
         iteration: brain.total_errors + 1
     });
 });
@@ -100,59 +62,101 @@ app.get('/', (req, res) => {
         <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>XAUUSD Doomsday Tracker</title>
+            <title>XAUUSD Doomsday Engine</title>
             <style>
                 table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
                 th, td { padding: 8px; text-align: left; border-bottom: 1px solid #374151; }
                 th { color: #f59e0b; font-weight: bold; }
             </style>
         </head>
-        <body style="background-color: #111827; color: white; font-family: sans-serif; padding: 20px;">
+        <body style="background-color: #0f172a; color: white; font-family: sans-serif; padding: 20px;">
             <div style="max-width: 500px; margin: 0 auto;">
-                <h2 style="color: #f59e0b;">🧠 Doomsday Intelligence Tracker</h2>
+                <h2 style="color: #f59e0b; text-align: center;">🧠 Doomsday Gold Engine v5</h2>
                 
-                <div style="background: #1f2937; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <p style="margin: 5px 0; font-size: 16px;">💰 Harga Emas: $<strong id="gold-price">...</strong></p>
-                    <p style="margin: 5px 0; font-size: 16px;">🤖 Sinyal AI: <span id="ai-signal" style="padding: 4px 8px; border-radius: 4px; font-weight: bold; background: #6b7280; color: white;">LOADING</span></p>
+                <div style="background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; text-align: center;">
+                    <span style="color: #94a3b8; font-size: 14px; font-weight: bold;">XAUUSD / PAXG PRICE</span>
+                    <div style="font-size: 32px; font-weight: bold; color: #f8fafc; margin: 5px 0;">$<span id="gold-price">...</span></div>
+                    <div style="margin-top: 10px;">
+                        <span id="ai-signal" style="padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 16px; background: #6b7280; color: white; display: inline-block;">LOADING ENGINE</span>
+                    </div>
                 </div>
                 
-                <div style="background: #374151; padding: 15px; border-radius: 8px; font-size: 13px; margin-bottom: 25px;">
-                    <h4 style="margin-top: 0; color: #f59e0b; border-bottom: 1px solid #555; padding-bottom: 5px;">📊 Log Evaluasi Otak Robot:</h4>
-                    <p>• Jam Log: <span id="log-time">...</span> WIB</p>
-                    <p>• Trend Weight: <strong id="trend-w">...</strong></p>
-                    <p>• Momentum Weight: <strong id="momentum-w">...</strong></p>
-                    <p style="color: #6ee7b7;">• Total Iterasi Belajar: Ke-<span id="total-iter">...</span> kali</p>
+                <div style="background: #1e293b; padding: 15px; border-radius: 12px; font-size: 13px; margin-bottom: 25px; border: 1px solid #334155;">
+                    <h4 style="margin-top: 0; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 8px; font-size: 14px;">📊 Live Mathematical Indicator Data:</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 5px 0;">
+                        <div>• EMA Fast (9): <strong id="ema-fast" style="color: #f43f5e;">...</strong></div>
+                        <div>• EMA Slow (21): <strong id="ema-slow" style="color: #ec4899;">...</strong></div>
+                        <div>• RSI (14): <strong id="rsi-val" style="color: #a855f7;">...</strong></div>
+                        <div>• ATR (14): <strong id="atr-val" style="color: #eab308;">...</strong></div>
+                    </div>
+                    <div style="border-top: 1px dashed #334155; margin-top: 8px; padding-top: 8px;">
+                        <p style="margin: 3px 0; color: #f97316;">🔥 Upper Doom Band: <strong id="upper-doom">...</strong></p>
+                        <p style="margin: 3px 0; color: #3b82f6;">💧 Lower Doom Band: <strong id="lower-doom">...</strong></p>
+                    </div>
+                    <div style="border-top: 1px solid #334155; margin-top: 8px; padding-top: 8px; font-size: 11px; color: #64748b;">
+                        Jam Log Pasar: <span id="log-time">...</span> WIB | Hitungan Belajar Cloud: Ke-<span id="total-iter">...</span>
+                    </div>
                 </div>
 
-                <h3 style="color: #f59e0b; margin-bottom: 5px;">⚡ Live Tracker History</h3>
-                <div style="background: #1f2937; padding: 10px; border-radius: 8px; max-height: 300px; overflow-y: auto;">
+                <h3 style="color: #f59e0b; margin-bottom: 8px; font-size: 15px;">⚡ Live Sinyal Doomsday History</h3>
+                <div style="background: #1e293b; padding: 10px; border-radius: 12px; max-height: 250px; overflow-y: auto; border: 1px solid #334155;">
                     <table>
                         <thead>
                             <tr>
                                 <th>TIME</th>
                                 <th>PRICE (USD)</th>
-                                <th>SIGNAL</th>
+                                <th>DOOM SIGNAL</th>
                             </tr>
                         </thead>
                         <tbody id="history-table-body"></tbody>
                     </table>
                 </div>
-                
-                <p style="font-size: 11px; color: #9ca3af; text-align: center; margin-top: 20px;">Data otomatis diperbarui dan dipelajari browser setiap 5 detik.</p>
             </div>
 
             <script>
-                let localLog = JSON.parse(localStorage.getItem('gold_log_history')) || [];
+                // Penyimpanan history candle lokal untuk kalkulasi indikator
+                let priceHistory = JSON.parse(localStorage.getItem('gold_price_series')) || [];
+                let signalLog = JSON.parse(localStorage.getItem('gold_doom_history')) || [];
+
+                // Fungsi Kalkulasi Matematika Pine Script di Sisi Browser
+                function calcEMA(data, period) {
+                    if(data.length === 0) return 0;
+                    let k = 2 / (period + 1);
+                    let ema = data[0];
+                    for (let i = 1; i < data.length; i++) { ema = data[i] * k + ema * (1 - k); }
+                    return ema;
+                }
+
+                function calcRSI(data, period = 14) {
+                    if (data.length < period + 1) return 50;
+                    let gains = 0, losses = 0;
+                    for (let i = data.length - period; i < data.length; i++) {
+                        let diff = data[i] - data[i - 1];
+                        if (diff > 0) gains += diff; else losses -= diff;
+                    }
+                    let rs = (gains / period) / ((losses / period) || 1);
+                    return 100 - (100 / (1 + rs));
+                }
+
+                function calcATR(prices, period = 14) {
+                    if(prices.length < 2) return 2.5;
+                    let trs = [];
+                    let start = Math.max(1, prices.length - period);
+                    for(let i = start; i < prices.length; i++){
+                        trs.push(Math.abs(prices[i] - prices[i-1]));
+                    }
+                    return trs.reduce((a,b)=>a+b, 0) / (trs.length || 1);
+                }
 
                 function renderTable() {
                     const tbody = document.getElementById('history-table-body');
                     tbody.innerHTML = '';
-                    localLog.slice().reverse().forEach(item => {
+                    signalLog.slice().reverse().forEach(item => {
                         const tr = document.createElement('tr');
                         tr.innerHTML = \`
-                            <td style="color: #9ca3af;">\${item.time}</td>
-                            <td style="font-weight: bold;">$\${item.price}</td>
-                            <td><span style="background: \${item.color}; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white;">\${item.signal}</span></td>
+                            <td style="color: #64748b;">\${item.time}</td>
+                            <td style="font-weight: bold; color: #e2e8f0;">$\${item.price}</td>
+                            <td><span style="background: \${item.color}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: white;">\${item.signal}</span></td>
                         \`;
                         tbody.appendChild(tr);
                     });
@@ -163,22 +167,61 @@ app.get('/', (req, res) => {
                         const res = await fetch('/api/update');
                         const data = await res.json();
                         
+                        if (!data.price || data.price === "0.00") return;
+
+                        let currentPrice = parseFloat(data.price);
                         document.getElementById('gold-price').innerText = data.price;
                         document.getElementById('log-time').innerText = data.time;
-                        document.getElementById('trend-w').innerText = data.trend;
-                        document.getElementById('momentum-w').innerText = data.momentum;
                         document.getElementById('total-iter').innerText = data.iteration;
-                        
-                        const signalEl = document.getElementById('ai-signal');
-                        signalEl.innerText = data.signal;
-                        signalEl.style.background = data.color;
 
-                        if (data.price) {
-                            localLog.push({ time: data.time, price: data.price, signal: data.signal, color: data.color });
-                            if (localLog.length > 50) localLog.shift();
-                            localStorage.setItem('gold_log_history', JSON.stringify(localLog));
-                            renderTable();
+                        // Simpan pergerakan harga ke barisan array
+                        priceHistory.push(currentPrice);
+                        if(priceHistory.length > 50) priceHistory.shift();
+                        localStorage.setItem('gold_price_series', JSON.stringify(priceHistory));
+
+                        // Hitung indikator Doomsday asli Pak Dhany
+                        let ema9 = calcEMA(priceHistory, 9);
+                        let ema21 = calcEMA(priceHistory, 21);
+                        let rsi14 = calcRSI(priceHistory, 14);
+                        let atr14 = calcATR(priceHistory, 14);
+
+                        let upperDoom = ema9 + (atr14 * 2);
+                        let lowerDoom = ema9 - (atr14 * 2);
+
+                        // Tampilkan hasil hitungan matematika di layar
+                        document.getElementById('ema-fast').innerText = ema9.toFixed(2);
+                        document.getElementById('ema-slow').innerText = ema21.toFixed(2);
+                        document.getElementById('rsi-val').innerText = rsi14.toFixed(2);
+                        document.getElementById('atr-val').innerText = atr14.toFixed(2);
+                        document.getElementById('upper-doom').innerText = upperDoom.toFixed(2);
+                        document.getElementById('lower-doom').innerText = lowerDoom.toFixed(2);
+
+                        // Jalankan Logika Eksekusi Sinyal Doomsday Bapak
+                        let signal = 'NEUTRAL';
+                        let color = '#6b7280';
+
+                        if (ema9 > ema21 && rsi14 > 55 && currentPrice > ema9) {
+                            signal = 'BUY 🟢'; color = '#10b981';
+                        } else if (ema9 < ema21 && rsi14 < 45 && currentPrice < ema9) {
+                            signal = 'SELL 🔴'; color = '#ef4444';
                         }
+
+                        if (currentPrice > upperDoom) {
+                            signal = 'DOOM SELL 🟠'; color = '#f97316';
+                        } else if (currentPrice < lowerDoom) {
+                            signal = 'DOOM BUY 🔵'; color = '#3b82f6';
+                        }
+
+                        const signalEl = document.getElementById('ai-signal');
+                        signalEl.innerText = signal;
+                        signalEl.style.background = color;
+
+                        // Simpan ke tabel histori bawah
+                        signalLog.push({ time: data.time, price: data.price, signal: signal, color: color });
+                        if (signalLog.length > 30) signalLog.shift();
+                        localStorage.setItem('gold_doom_history', JSON.stringify(signalLog));
+                        renderTable();
+
                     } catch (e) { console.error(e); }
                 }
 
