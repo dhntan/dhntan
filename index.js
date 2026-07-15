@@ -32,7 +32,6 @@ async function incrementIteration() {
     } catch (e) { console.error(e); }
 }
 
-// Ambil harga asli lewat Coinbase yang sudah terbukti lancar
 app.get('/api/update', async (req, res) => {
     let currentPrice = 0;
     let brain = await getBrainData();
@@ -62,7 +61,7 @@ app.get('/', (req, res) => {
         <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>XAUUSD Doomsday Engine</title>
+            <title>XAUUSD Doomsday Engine M15</title>
             <style>
                 table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
                 th, td { padding: 8px; text-align: left; border-bottom: 1px solid #374151; }
@@ -71,18 +70,18 @@ app.get('/', (req, res) => {
         </head>
         <body style="background-color: #0f172a; color: white; font-family: sans-serif; padding: 20px;">
             <div style="max-width: 500px; margin: 0 auto;">
-                <h2 style="color: #f59e0b; text-align: center;">🧠 Doomsday Gold Engine v5</h2>
+                <h2 style="color: #f59e0b; text-align: center;">🧠 Doomsday Gold Engine v5 (M15)</h2>
                 
                 <div style="background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; text-align: center;">
-                    <span style="color: #94a3b8; font-size: 14px; font-weight: bold;">XAUUSD / PAXG PRICE</span>
+                    <span style="color: #94a3b8; font-size: 14px; font-weight: bold;">XAUUSD / PAXG PRICE (LIVE)</span>
                     <div style="font-size: 32px; font-weight: bold; color: #f8fafc; margin: 5px 0;">$<span id="gold-price">...</span></div>
                     <div style="margin-top: 10px;">
-                        <span id="ai-signal" style="padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 16px; background: #6b7280; color: white; display: inline-block;">LOADING ENGINE</span>
+                        <span id="ai-signal" style="padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 16px; background: #6b7280; color: white; display: inline-block;">WAITING M15 CANDLE...</span>
                     </div>
                 </div>
                 
                 <div style="background: #1e293b; padding: 15px; border-radius: 12px; font-size: 13px; margin-bottom: 25px; border: 1px solid #334155;">
-                    <h4 style="margin-top: 0; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 8px; font-size: 14px;">📊 Live Mathematical Indicator Data:</h4>
+                    <h4 style="margin-top: 0; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 8px; font-size: 14px;">📊 Indicator Data (M15 Candle Close):</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 5px 0;">
                         <div>• EMA Fast (9): <strong id="ema-fast" style="color: #f43f5e;">...</strong></div>
                         <div>• EMA Slow (21): <strong id="ema-slow" style="color: #ec4899;">...</strong></div>
@@ -94,17 +93,17 @@ app.get('/', (req, res) => {
                         <p style="margin: 3px 0; color: #3b82f6;">💧 Lower Doom Band: <strong id="lower-doom">...</strong></p>
                     </div>
                     <div style="border-top: 1px solid #334155; margin-top: 8px; padding-top: 8px; font-size: 11px; color: #64748b;">
-                        Jam Log Pasar: <span id="log-time">...</span> WIB | Hitungan Belajar Cloud: Ke-<span id="total-iter">...</span>
+                        Jam Log Pasar: <span id="log-time">...</span> WIB | Cloud Iter: <span id="total-iter">...</span> | Timer Menit: <span id="minutes-countdown" style="color: #eab308; font-weight: bold;">...</span>
                     </div>
                 </div>
 
-                <h3 style="color: #f59e0b; margin-bottom: 8px; font-size: 15px;">⚡ Live Sinyal Doomsday History</h3>
+                <h3 style="color: #f59e0b; margin-bottom: 8px; font-size: 15px;">⚡ Live Sinyal Doomsday History (M15)</h3>
                 <div style="background: #1e293b; padding: 10px; border-radius: 12px; max-height: 250px; overflow-y: auto; border: 1px solid #334155;">
                     <table>
                         <thead>
                             <tr>
                                 <th>TIME</th>
-                                <th>PRICE (USD)</th>
+                                <th>CLOSE PRICE (USD)</th>
                                 <th>DOOM SIGNAL</th>
                             </tr>
                         </thead>
@@ -114,11 +113,13 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
-                // Penyimpanan history candle lokal untuk kalkulasi indikator
-                let priceHistory = JSON.parse(localStorage.getItem('gold_price_series')) || [];
-                let signalLog = JSON.parse(localStorage.getItem('gold_doom_history')) || [];
+                // Penyimpanan history candle M15 lokal
+                let priceHistory = JSON.parse(localStorage.getItem('gold_price_series_m15')) || [];
+                let signalLog = JSON.parse(localStorage.getItem('gold_doom_history_m15')) || [];
+                
+                // Penampung harga sementera di dalam rentang 15 menit
+                let tempPricesThis15Min = [];
 
-                // Fungsi Kalkulasi Matematika Pine Script di Sisi Browser
                 function calcEMA(data, period) {
                     if(data.length === 0) return 0;
                     let k = 2 / (period + 1);
@@ -154,9 +155,9 @@ app.get('/', (req, res) => {
                     signalLog.slice().reverse().forEach(item => {
                         const tr = document.createElement('tr');
                         tr.innerHTML = \`
-                            <td style="color: #64748b;">\${item.time}</td>
-                            <td style="font-weight: bold; color: #e2e8f0;">$\${item.price}</td>
-                            <td><span style="background: \${item.color}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: white;">\${item.signal}</span></td>
+                            <td style="color: #64748b;">\053{item.time}</td>
+                            <td style="font-weight: bold; color: #e2e8f0;">$\053{item.price}</td>
+                            <td><span style="background: \053{item.color}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: white;">\053{item.signal}</span></td>
                         \`;
                         tbody.appendChild(tr);
                     });
@@ -174,25 +175,92 @@ app.get('/', (req, res) => {
                         document.getElementById('log-time').innerText = data.time;
                         document.getElementById('total-iter').innerText = data.iteration;
 
-                        // Simpan pergerakan harga ke barisan array
-                        priceHistory.push(currentPrice);
-                        if(priceHistory.length > 50) priceHistory.shift();
-                        localStorage.setItem('gold_price_series', JSON.stringify(priceHistory));
+                        // Baca waktu lokal untuk mendeteksi penutupan M15
+                        const now = new Date();
+                        const minutes = now.getMinutes();
+                        const seconds = now.getSeconds();
 
-                        // Hitung indikator Doomsday asli Pak Dhany
-                        let ema9 = calcEMA(priceHistory, 9);
-                        let ema21 = calcEMA(priceHistory, 21);
-                        let rsi14 = calcRSI(priceHistory, 14);
-                        let atr14 = calcATR(priceHistory, 14);
+                        // Hitung mundur sisa menit ke candle berikutnya
+                        const nextCloseMinutes = 15 - (minutes % 15);
+                        document.getElementById('minutes-countdown').innerText = nextCloseMinutes + "m " + (60 - seconds) + "s";
 
-                        let upperDoom = ema9 + (atr14 * 2);
-                        let lowerDoom = ema9 - (atr14 * 2);
+                        // Tabung harga live saat ini
+                        tempPricesThis15Min.push(currentPrice);
 
-                        // Tampilkan hasil hitungan matematika di layar
-                        document.getElementById('ema-fast').innerText = ema9.toFixed(2);
-                        document.getElementById('ema-slow').innerText = ema21.toFixed(2);
-                        document.getElementById('rsi-val').innerText = rsi14.toFixed(2);
-                        document.getElementById('atr-val').innerText = atr14.toFixed(2);
+                        // Trigger penutupan candle setiap menit kelipatan 15 (00, 15, 30, 45) di bawah 10 detik awal
+                        if (minutes % 15 === 0 && minutes !== parseInt(localStorage.getItem('last_processed_minute')) && tempPricesThis15Min.length > 5) {
+                            
+                            // Ambil harga close (detik terakhir sebelum menit kelipatan 15)
+                            let closePrice = tempPricesThis15Min[tempPricesThis15Min.length - 1];
+                            tempPricesThis15Min = []; // reset penampung harga
+                            
+                            // Kunci menit ini agar tidak dieksekusi berulang kali pada detik berikutnya
+                            localStorage.setItem('last_processed_minute', minutes.toString());
+
+                            // Masukkan ke history data M15
+                            priceHistory.push(closePrice);
+                            if(priceHistory.length > 50) priceHistory.shift();
+                            localStorage.setItem('gold_price_series_m15', JSON.stringify(priceHistory));
+
+                            // Jalankan Kalkulasi Indikator Doomsday
+                            let ema9 = calcEMA(priceHistory, 9);
+                            let ema21 = calcEMA(priceHistory, 21);
+                            let rsi14 = calcRSI(priceHistory, 14);
+                            let atr14 = calcATR(priceHistory, 14);
+
+                            let upperDoom = ema9 + (atr14 * 2);
+                            let lowerDoom = ema9 - (atr14 * 2);
+
+                            // Perbarui Telemetri Layar
+                            document.getElementById('ema-fast').innerText = ema9.toFixed(2);
+                            document.getElementById('ema-slow').innerText = ema21.toFixed(2);
+                            document.getElementById('rsi-val').innerText = rsi14.toFixed(2);
+                            document.getElementById('atr-val').innerText = atr14.toFixed(2);
+                            document.getElementById('upper-doom').innerText = upperDoom.toFixed(2);
+                            document.getElementById('lower-doom').innerText = lowerDoom.toFixed(2);
+
+                            // Penentuan Sinyal Final Doomsday
+                            let signal = 'NEUTRAL';
+                            let color = '#6b7280';
+
+                            if (ema9 > ema21 && rsi14 > 55 && closePrice > ema9) {
+                                signal = 'BUY 🟢'; color = '#10b981';
+                            } else if (ema9 < ema21 && rsi14 < 45 && closePrice < ema9) {
+                                signal = 'SELL 🔴'; color = '#ef4444';
+                            }
+
+                            if (closePrice > upperDoom) {
+                                signal = 'DOOM SELL 🟠'; color = '#f97316';
+                            } else if (closePrice < lowerDoom) {
+                                signal = 'DOOM BUY 🔵'; color = '#3b82f6';
+                            }
+
+                            const signalEl = document.getElementById('ai-signal');
+                            signalEl.innerText = signal;
+                            signalEl.style.background = color;
+
+                            // Update Tabel Histori
+                            const timeLabel = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB';
+                            signalLog.push({ time: timeLabel, price: closePrice.toFixed(2), signal: signal, color: color });
+                            if (signalLog.length > 30) signalLog.shift();
+                            localStorage.setItem('gold_doom_history_m15', JSON.stringify(signalLog));
+                            renderTable();
+                        }
+
+                    } catch (e) { console.error(e); }
+                }
+
+                renderTable();
+                setInterval(fetchNewData, 5000);
+                fetchNewData();
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+module.exports = app;
+
                         document.getElementById('upper-doom').innerText = upperDoom.toFixed(2);
                         document.getElementById('lower-doom').innerText = lowerDoom.toFixed(2);
 
