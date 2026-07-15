@@ -113,11 +113,8 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
-                // Penyimpanan history candle M15 lokal
                 let priceHistory = JSON.parse(localStorage.getItem('gold_price_series_m15')) || [];
                 let signalLog = JSON.parse(localStorage.getItem('gold_doom_history_m15')) || [];
-                
-                // Penampung harga sementera di dalam rentang 15 menit
                 let tempPricesThis15Min = [];
 
                 function calcEMA(data, period) {
@@ -154,11 +151,12 @@ app.get('/', (req, res) => {
                     tbody.innerHTML = '';
                     signalLog.slice().reverse().forEach(item => {
                         const tr = document.createElement('tr');
-                        tr.innerHTML = \`
-                            <td style="color: #64748b;">\053{item.time}</td>
-                            <td style="font-weight: bold; color: #e2e8f0;">$\053{item.price}</td>
-                            <td><span style="background: \053{item.color}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: white;">\053{item.signal}</span></td>
-                        \`;
+                        // Memperbaiki penulisan interpolasi string HTML agar aman di NodeJS
+                        tr.innerHTML = ' \
+                            <td style="color: #64748b;">' + item.time + '</td> \
+                            <td style="font-weight: bold; color: #e2e8f0;">$' + item.price + '</td> \
+                            <td><span style="background: ' + item.color + '; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: white;">' + item.signal + '</span></td> \
+                        ';
                         tbody.appendChild(tr);
                     });
                 }
@@ -175,34 +173,26 @@ app.get('/', (req, res) => {
                         document.getElementById('log-time').innerText = data.time;
                         document.getElementById('total-iter').innerText = data.iteration;
 
-                        // Baca waktu lokal untuk mendeteksi penutupan M15
                         const now = new Date();
                         const minutes = now.getMinutes();
                         const seconds = now.getSeconds();
 
-                        // Hitung mundur sisa menit ke candle berikutnya
                         const nextCloseMinutes = 15 - (minutes % 15);
                         document.getElementById('minutes-countdown').innerText = nextCloseMinutes + "m " + (60 - seconds) + "s";
 
-                        // Tabung harga live saat ini
                         tempPricesThis15Min.push(currentPrice);
 
-                        // Trigger penutupan candle setiap menit kelipatan 15 (00, 15, 30, 45) di bawah 10 detik awal
                         if (minutes % 15 === 0 && minutes !== parseInt(localStorage.getItem('last_processed_minute')) && tempPricesThis15Min.length > 5) {
                             
-                            // Ambil harga close (detik terakhir sebelum menit kelipatan 15)
                             let closePrice = tempPricesThis15Min[tempPricesThis15Min.length - 1];
-                            tempPricesThis15Min = []; // reset penampung harga
+                            tempPricesThis15Min = []; 
                             
-                            // Kunci menit ini agar tidak dieksekusi berulang kali pada detik berikutnya
                             localStorage.setItem('last_processed_minute', minutes.toString());
 
-                            // Masukkan ke history data M15
                             priceHistory.push(closePrice);
                             if(priceHistory.length > 50) priceHistory.shift();
                             localStorage.setItem('gold_price_series_m15', JSON.stringify(priceHistory));
 
-                            // Jalankan Kalkulasi Indikator Doomsday
                             let ema9 = calcEMA(priceHistory, 9);
                             let ema21 = calcEMA(priceHistory, 21);
                             let rsi14 = calcRSI(priceHistory, 14);
@@ -211,7 +201,6 @@ app.get('/', (req, res) => {
                             let upperDoom = ema9 + (atr14 * 2);
                             let lowerDoom = ema9 - (atr14 * 2);
 
-                            // Perbarui Telemetri Layar
                             document.getElementById('ema-fast').innerText = ema9.toFixed(2);
                             document.getElementById('ema-slow').innerText = ema21.toFixed(2);
                             document.getElementById('rsi-val').innerText = rsi14.toFixed(2);
@@ -219,7 +208,6 @@ app.get('/', (req, res) => {
                             document.getElementById('upper-doom').innerText = upperDoom.toFixed(2);
                             document.getElementById('lower-doom').innerText = lowerDoom.toFixed(2);
 
-                            // Penentuan Sinyal Final Doomsday
                             let signal = 'NEUTRAL';
                             let color = '#6b7280';
 
@@ -239,56 +227,12 @@ app.get('/', (req, res) => {
                             signalEl.innerText = signal;
                             signalEl.style.background = color;
 
-                            // Update Tabel Histori
                             const timeLabel = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB';
                             signalLog.push({ time: timeLabel, price: closePrice.toFixed(2), signal: signal, color: color });
                             if (signalLog.length > 30) signalLog.shift();
                             localStorage.setItem('gold_doom_history_m15', JSON.stringify(signalLog));
                             renderTable();
                         }
-
-                    } catch (e) { console.error(e); }
-                }
-
-                renderTable();
-                setInterval(fetchNewData, 5000);
-                fetchNewData();
-            </script>
-        </body>
-        </html>
-    `);
-});
-
-module.exports = app;
-
-                        document.getElementById('upper-doom').innerText = upperDoom.toFixed(2);
-                        document.getElementById('lower-doom').innerText = lowerDoom.toFixed(2);
-
-                        // Jalankan Logika Eksekusi Sinyal Doomsday Bapak
-                        let signal = 'NEUTRAL';
-                        let color = '#6b7280';
-
-                        if (ema9 > ema21 && rsi14 > 55 && currentPrice > ema9) {
-                            signal = 'BUY 🟢'; color = '#10b981';
-                        } else if (ema9 < ema21 && rsi14 < 45 && currentPrice < ema9) {
-                            signal = 'SELL 🔴'; color = '#ef4444';
-                        }
-
-                        if (currentPrice > upperDoom) {
-                            signal = 'DOOM SELL 🟠'; color = '#f97316';
-                        } else if (currentPrice < lowerDoom) {
-                            signal = 'DOOM BUY 🔵'; color = '#3b82f6';
-                        }
-
-                        const signalEl = document.getElementById('ai-signal');
-                        signalEl.innerText = signal;
-                        signalEl.style.background = color;
-
-                        // Simpan ke tabel histori bawah
-                        signalLog.push({ time: data.time, price: data.price, signal: signal, color: color });
-                        if (signalLog.length > 30) signalLog.shift();
-                        localStorage.setItem('gold_doom_history', JSON.stringify(signalLog));
-                        renderTable();
 
                     } catch (e) { console.error(e); }
                 }
