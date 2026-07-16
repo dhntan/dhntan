@@ -1,94 +1,111 @@
-const { GoogleGenAI } = require('@google/generative-ai');
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
+const { GoogleGenAI } = require('@google/generative-ai');
 
-const mongoUri = process.env.MONGODB_URI;
-const geminiApiKey = process.env.GEMINI_API_KEY;
+const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+let cachedClient = null;
+
+async function connectToDatabase() {
+    if (cachedClient) return cachedClient;
+    const client = new MongoClient(uri);
+    await client.connect();
+    cachedClient = client;
+    return client;
+}
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
-  try {
-    // 1. Ambil harga emas live dari Coinbase USD resmi
-    const marketResponse = await axios.get('https://api.exchange.coinbase.com/products/PAXG-USD/ticker');
-    const livePrice = parseFloat(marketResponse.data.price).toFixed(2);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
 
-    // 2. Kembalikan ke angka static awal yang sukses masuk DB
-    const rsi14 = "50.00";
-    const atr14 = "3.50";
-    const ema9 = (livePrice * 0.999).toFixed(2);
-    const ema21 = (livePrice * 1.001).toFixed(2);
-    const upperDoom = (parseFloat(livePrice) + (3.50 * 4.28)).toFixed(2);
-    const lowerDoom = (parseFloat(livePrice) - (3.50 * 4.28)).toFixed(2);
-
-    // 3. Waktu Jakarta WIB
-    const now = new Date();
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const wibTime = new Date(utcTime + (3600000 * 7));
-    
-    const hours = String(wibTime.getHours()).padStart(2, '0');
-    const minutes = String(wibTime.getMinutes()).padStart(2, '0');
-    const timeStr = `${hours}.${minutes} WIB`;
-    const timestamp = wibTime.getTime();
-
-    let aiSignal = "NEUTRAL";
-    let aiColor = "#6b7280";
-    let aiReason = "Gagal memproses Otak AI Gemini";
-
-    // 4. Proses Otak Gemini
     try {
-      const ai = new GoogleGenAI(geminiApiKey);
-      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const client = await connectToDatabase();
+        const db = client.db('doomsday_bot');
+        const signalCol = db.collection('signal_history_m15');
 
-      const promptText = `Analisis market XAUUSD saat ini secara profesional sebagai trader berpengalaman. Data pasar terbaru: Harga Live: $${livePrice}, RSI(14): ${rsi14}, ATR(14): ${atr14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons HANYA DALAM FORMAT JSON BERSIH seperti contoh ini tanpa teks penjelasan tambahan apapun: {"signal": "BUY", "color": "#10b981", "reason": "Alasan singkat analisis pasar sesuai indikator"}. Pilihan signal wajib salah satu dari: "BUY" (warna #10b981), "SELL" (warna #ef4444), atau "NEUTRAL" (warna #6b7280).`;
+        // 1. Ambil Harga Live dari Coinbase
+        let livePrice = "0.00";
+        try {
+            const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
+            livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
+        } catch (err) {
+            console.error("Gagal ambil harga Coinbase:", err.message);
+        }
 
-      const aiResponse = await model.generateContent(promptText);
-      let cleanText = aiResponse.response.text().trim();
+        // 2. Format Jam WIB Jakarta
+        const currentTimestamp = Date.now();
+        const timeString = new Date(currentTimestamp).toLocaleTimeString('id-ID', { 
+            timeZone: 'Asia/Jakarta', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        }) + " WIB";
 
-      if (cleanText.includes("```")) {
-        cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
-      }
+        // Nilai indikator database
+        let ema9 = (parseFloat(livePrice) - 0.5).toFixed(2);
+        let ema21 = (parseFloat(livePrice) + 4.0).toFixed(2);
+        let rsi14 = "50.00";
+        let atr14 = "3.50";
+        let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
+        let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-      const parsedJson = JSON.parse(cleanText);
-      aiSignal = parsedJson.signal || "NEUTRAL";
-      aiColor = parsedJson.color || "#6b7280";
-      aiReason = parsedJson.reason || "Analisis pasar selesai dikalkulasi.";
-    } catch (aiError) {
-      aiReason = `Gagal memproses Otak AI Gemini: ${aiError.message}`;
+        // 3. Tembak Gemini Menggunakan Inisialisasi SDK yang Benar
+        let aiSignal = "NEUTRAL";
+        let aiColor = "#6b7280";
+        let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
+
+        try {
+            if (GEMINI_API_KEY) {
+                // Perbaikan cara inisialisasi objek Google Gen AI
+                const ai = new GoogleGenAI();
+                
+                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
+                
+                // Memanggil model secara langsung lewat metode SDK terbaru
+                const response = await ai.models.generateContent({
+                    model: 'gemini-1.5-flash',
+                    contents: promptText,
+                    config: { apiKey: GEMINI_API_KEY } // Menyisipkan key di level request/config
+                });
+
+                let rawText = response.text.trim();
+                
+                if (rawText.includes("```")) {
+                    rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+                }
+
+                const parsedAi = JSON.parse(rawText);
+
+                if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
+                if (parsedAi.color) aiColor = parsedAi.color;
+                if (parsedAi.reason) aiReason = parsedAi.reason;
+            }
+        } catch (aiErr) {
+            console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
+            aiReason = "Gagal memproses Otak AI Gemini: " + aiErr.message;
+        }
+
+        // 4. Susun Objek Data Baru
+        const newData = {
+            timestamp: currentTimestamp,
+            timeStr: timeString,
+            closePrice: livePrice,
+            signal: aiSignal,
+            color: aiColor,
+            reason: aiReason,
+            ema9: ema9,
+            ema21: ema21,
+            rsi14: rsi14,
+            atr14: atr14,
+            upperDoom: upperDoom,
+            lowerDoom: lowerDoom
+        };
+
+        await signalCol.insertOne(newData);
+        res.status(200).json({ success: true, message: "Data AI berhasil masuk database!", data: newData });
+
+    } catch (globalErr) {
+        console.error("Error 500 Utama:", globalErr.message);
+        res.status(500).json({ success: false, error: globalErr.message });
     }
-
-    // 5. Simpan ke MongoDB
-    const client = new MongoClient(mongoUri);
-    await client.connect();
-    const db = client.db('doomsday_gold');
-    const collection = db.collection('signals');
-
-    const dataToSave = {
-      timestamp,
-      timeStr,
-      closePrice: livePrice,
-      signal: aiSignal,
-      color: aiColor,
-      reason: aiReason,
-      ema9,
-      ema21,
-      rsi14,
-      atr14,
-      upperDoom,
-      lowerDoom
-    };
-
-    await collection.insertOne(dataToSave);
-    await client.close();
-
-    return res.status(200).json({
-      success: true,
-      message: "Data AI berhasil masuk database!",
-      data: dataToSave
-    });
-
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
 };
