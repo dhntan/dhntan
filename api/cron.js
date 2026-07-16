@@ -1,5 +1,6 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
+const { GoogleGenAI } = require('@google/generative-ai');
 
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 let cachedClient = null;
@@ -48,25 +49,25 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini API dengan Endpoint v1beta yang diperbaiki modelnya
+        // 3. Tembak Gemini Menggunakan SDK Resmi (Anti-404)
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
             if (GEMINI_API_KEY) {
+                // Inisialisasi SDK Resmi Google
+                const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+                
                 const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
                 
-                // Menggunakan endpoint v1beta kembali, namun dengan model target 'gemini-1.5-flash' murni tanpa embel-embel
-                const geminiRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-                    {
-                        contents: [{ parts: [{ text: promptText }] }]
-                    },
-                    { timeout: 9000 }
-                );
+                // Memanggil model secara langsung lewat SDK resmi
+                const response = await ai.models.generateContent({
+                    model: 'gemini-1.5-flash',
+                    contents: promptText
+                });
 
-                let rawText = geminiRes.data.candidates[0].content.parts[0].text.trim();
+                let rawText = response.text.trim();
                 
                 if (rawText.includes("```")) {
                     rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
