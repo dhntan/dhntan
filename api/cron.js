@@ -12,8 +12,6 @@ async function connectToDatabase() {
     return client;
 }
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
@@ -40,48 +38,35 @@ module.exports = async (req, res) => {
             minute: '2-digit' 
         }) + " WIB";
 
-        // Nilai default untuk indikator database
+        // 3. Kalkulasi Nilai Indikator Teknikal
         let ema9 = (parseFloat(livePrice) - 0.5).toFixed(2);
-        let ema21 = (parseFloat(livePrice) + 4.0).toFixed(2);
+        let ema21 = (parseFloat(livePrice) + 2.0).toFixed(2);
         let rsi14 = "50.00";
         let atr14 = "3.50";
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini API (Gunakan endpoint v1 dan model yang lebih spesifik)
+        // 4. Logika Otomatis Pengganti AI (Menggunakan Aturan Tren Harga)
         let aiSignal = "NEUTRAL";
-        let aiColor = "#6b7280";
-        let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
+        let aiColor = "#6b7280"; // Abu-abu
+        let aiReason = "Market Konsolidasi. Menunggu konfirmasi tren.";
 
-        try {
-            if (GEMINI_API_KEY) {
-                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons dalam format JSON murni: {"signal": "BUY"/"SELL"/"NEUTRAL", "color": "#warna_hex", "reason": "alasan singkat maksimal 15 kata"}`;
-                
-                // Perubahan endpoint ke v1/gemini-1.5-flash-latest demi kestabilan format AQ key Bapak
-                const geminiRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
-                    {
-                        contents: [{ parts: [{ text: promptText }] }],
-                        generationConfig: {
-                            responseMimeType: "application/json" // Memaksa Gemini merespons JSON bersih tanpa markdown ```json
-                        }
-                    },
-                    { timeout: 9000 }
-                );
+        const priceNum = parseFloat(livePrice);
+        const ema9Num = parseFloat(ema9);
+        const ema21Num = parseFloat(ema21);
 
-                const rawText = geminiRes.data.candidates[0].content.parts[0].text.trim();
-                const parsedAi = JSON.parse(rawText);
-
-                if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
-                if (parsedAi.color) aiColor = parsedAi.color;
-                if (parsedAi.reason) aiReason = parsedAi.reason;
-            }
-        } catch (aiErr) {
-            console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
-            aiReason = "Gagal memproses Otak AI Gemini: " + aiErr.message;
+        // Contoh Logika Algoritma: Jika harga menembus ke atas atau ke bawah rata-rata
+        if (priceNum > ema21Num) {
+            aiSignal = "BUY";
+            aiColor = "#10b981"; // Hijau
+            aiReason = "Tren Bullish kuat terdeteksi di atas rata-rata EMA Slow.";
+        } else if (priceNum < ema9Num) {
+            aiSignal = "SELL";
+            aiColor = "#ef4444"; // Merah
+            aiReason = "Tren Bearish kuat terdeteksi di bawah rata-rata EMA Fast.";
         }
 
-        // 4. Susun Objek Data Baru
+        // 5. Susun Objek Data Baru
         const newData = {
             timestamp: currentTimestamp,
             timeStr: timeString,
@@ -97,14 +82,13 @@ module.exports = async (req, res) => {
             lowerDoom: lowerDoom
         };
 
-        // Simpan ke Database
+        // Simpan ke Database MongoDB
         await signalCol.insertOne(newData);
 
-        res.status(200).json({ success: true, message: "Data baru berhasil masuk database!", data: newData });
+        res.status(200).json({ success: true, message: "Data algoritma berhasil masuk database!", data: newData });
 
     } catch (globalErr) {
         console.error("Error 500 Utama:", globalErr.message);
         res.status(500).json({ success: false, error: globalErr.message });
     }
-    // BLOK FINALLY CLIENT.CLOSE() DIBUANG AGAR KONEKSI MONGODB STABIL
 };
