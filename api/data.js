@@ -4,6 +4,7 @@ const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mong
 const client = new MongoClient(uri);
 
 module.exports = async (req, res) => {
+    // Header pengaman & anti-cache
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -13,21 +14,23 @@ module.exports = async (req, res) => {
         const db = client.db('doomsday_bot');
         const signalCol = db.collection('signal_history_m15');
 
-        // Ambil 20 data terbaru, urutkan dari yang paling baru
+        // Ambil 20 data terakhir dari database, urutkan dari yang paling baru
         const historyData = await signalCol
             .find({})
             .sort({ timestamp: -1 })
             .limit(20)
             .toArray();
 
-        // JURUS AMAN: Jika frontend minta array langsung, atau minta objek ber-property .data,
-        // kita gabungkan formatnya dengan Object.assign supaya dua-duanya valid!
-        const safeResponse = Object.assign([...historyData], {
-            success: true,
-            data: historyData
-        });
+        // KUNCI COCOK: Bungkus data sesuai struktur yang diminta oleh index.js Bapak
+        const latestRecord = historyData[0] || {};
+        const livePriceData = latestRecord.closePrice || '...';
 
-        res.status(200).json(safeResponse);
+        res.status(200).json({
+            success: true,
+            livePrice: livePriceData,
+            latest: latestRecord,
+            signals: historyData
+        });
 
     } catch (globalErr) {
         console.error("Error API Data:", globalErr.message);
