@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini API dengan Mode Teks Normal (Paling Aman untuk Key AQ)
+        // 3. Tembak Gemini API dengan Alamat Endpoint Resmi v1/models/gemini-1.5-flash
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
@@ -57,18 +57,17 @@ module.exports = async (req, res) => {
             if (GEMINI_API_KEY) {
                 const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
                 
+                // URL diubah menjadi /v1/models/gemini-1.5-flash (Tanpa kata "-latest")
                 const geminiRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+                    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                     {
                         contents: [{ parts: [{ text: promptText }] }]
                     },
                     { timeout: 9000 }
                 );
 
-                // Trik ekstraksi JSON manual yang anti-gagal meskipun ada markdown
                 let rawText = geminiRes.data.candidates[0].content.parts[0].text.trim();
                 
-                // Jika Gemini membungkusnya dengan ```json ... ```, kita bersihkan manual
                 if (rawText.includes("```")) {
                     rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
                 }
