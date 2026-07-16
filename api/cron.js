@@ -7,26 +7,26 @@ const { RSI, ATR } = require('technicalindicators');
 const mongoUri = process.env.MONGODB_URI;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-// Pastikan skrip ini hanya menerima request (bisa diakses)
 module.exports = async (req, res) => {
   try {
-    // 1. AMBIL DATA HARGA LIVE & HISTORI CANDLE DARI COINBASE (PAXG-USDT)
-    // Kita ambil 50 candle terakhir untuk akurasi hitungan RSI (14) dan ATR (14)
-    const marketResponse = await axios.get('https://api.exchange.coinbase.com/products/PAXG-USDT/candles?granularity=900');
-    const candles = marketResponse.data; // Format: [time, low, high, open, close, volume]
+    // 1. AMBIL DATA HARGA & HISTORI CANDLE M15 DARI BINANCE (PAXG-USDT)
+    // limit=50 mengambil 50 candle terakhir untuk akurasi hitungan RSI(14) dan ATR(14)
+    const marketResponse = await axios.get('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=15m&limit=50');
+    const candles = marketResponse.data; 
+    // Format response Binance: [ [open_time, open, high, low, close, volume, close_time, ...] ]
 
     if (!candles || candles.length < 20) {
-      throw new Error("Gagal mengambil histori candle yang cukup dari Coinbase API");
+      throw new Error("Gagal mengambil histori candle yang cukup dari Binance API");
     }
 
-    // Ambil harga penutupan candle paling terakhir (Live Price)
-    const livePrice = parseFloat(candles[0][4]).toFixed(2);
+    // Ambil candle paling terakhir (indeks terakhir di array Binance adalah candle terbaru)
+    const latestCandle = candles[candles.length - 1];
+    const livePrice = parseFloat(latestCandle[4]).toFixed(2); // close price
 
-    // Susun array histori harga secara berurutan (dari candle lama ke candle baru)
-    // Coinbase mengembalikan data dari yang terbaru ke terlama, jadi harus kita reverse()
-    const closePrices = candles.map(c => parseFloat(c[4])).reverse();
-    const highPrices = candles.map(c => parseFloat(c[2])).reverse();
-    const lowPrices = candles.map(c => parseFloat(c[1])).reverse();
+    // Susun array histori harga dari yang lama ke yang baru (Binance sudah berurutan otomatis)
+    const closePrices = candles.map(c => parseFloat(c[4]));
+    const highPrices = candles.map(c => parseFloat(c[2]));
+    const lowPrices = candles.map(c => parseFloat(c[3]));
 
     // 2. HITUNG INDIKATOR SECARA REAL-TIME DENGAN LIBRARY
     const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
