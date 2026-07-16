@@ -18,22 +18,50 @@ module.exports = async (req, res) => {
             console.error(err); 
         }
 
-        // Mengambil 30 data sinyal terbaru dari MongoDB
+        // Ambil 30 data dari MongoDB
         const signals = await signalCol.find().sort({ timestamp: -1 }).limit(30).toArray();
         
-        // Memastikan jika ada data lama yang strukturnya berbeda agar tidak memunculkan undefined
-        const formattedSignals = signals.map(s => ({
-            timeStr: s.timeStr || (s.timestamp ? new Date(s.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + " WIB" : "..."),
-            closePrice: s.closePrice || (s.price ? parseFloat(s.price).toFixed(2) : livePrice),
-            signal: s.signal || "NEUTRAL",
-            color: s.color || "#6b7280"
-        }));
+        // SINKRONISASI TOTAL: Memaksa format data agar aman dibaca frontend index.js
+        const formattedSignals = signals.map(s => {
+            let waktu = "...";
+            if (s.timeStr) {
+                waktu = s.timeStr;
+            } else if (s.timestamp) {
+                waktu = new Date(s.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + " WIB";
+            }
 
-        const latestSignal = signals[0] || {
-            signal: 'WAITING M15...', color: '#6b7280',
+            let harga = livePrice;
+            if (s.closePrice) {
+                harga = s.closePrice;
+            } else if (s.price) {
+                harga = parseFloat(s.price).toFixed(2);
+            }
+
+            return {
+                timeStr: waktu,
+                closePrice: harga,
+                signal: s.signal || "NEUTRAL",
+                color: s.color || "#6b7280",
+                reason: s.reason || ""
+            };
+        });
+
+        // Pastikan objek latest tidak kosong
+        const latestSignal = formattedSignals[0] || {
+            signal: 'NEUTRAL', color: '#6b7280', reason: 'Mengumpulkan data...',
             ema9: '...', ema21: '...', rsi14: '...', atr14: '...',
             upperDoom: '...', lowerDoom: '...'
         };
+
+        // Jika data latest asli ada indikatornya, ambil nilainya
+        if (signals[0]) {
+            latestSignal.ema9 = signals[0].ema9 || '...';
+            latestSignal.ema21 = signals[0].ema21 || '...';
+            latestSignal.rsi14 = signals[0].rsi14 || '...';
+            latestSignal.atr14 = signals[0].atr14 || '...';
+            latestSignal.upperDoom = signals[0].upperDoom || '...';
+            latestSignal.lowerDoom = signals[0].lowerDoom || '...';
+        }
 
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.json({ 
