@@ -49,22 +49,23 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini Menggunakan SDK Resmi (Anti-404)
+        // 3. Tembak Gemini Menggunakan Inisialisasi SDK yang Benar
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
             if (GEMINI_API_KEY) {
-                // Inisialisasi SDK Resmi Google
-                const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+                // Perbaikan cara inisialisasi objek Google Gen AI
+                const ai = new GoogleGenAI();
                 
                 const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
                 
-                // Memanggil model secara langsung lewat SDK resmi
+                // Memanggil model secara langsung lewat metode SDK terbaru
                 const response = await ai.models.generateContent({
                     model: 'gemini-1.5-flash',
-                    contents: promptText
+                    contents: promptText,
+                    config: { apiKey: GEMINI_API_KEY } // Menyisipkan key di level request/config
                 });
 
                 let rawText = response.text.trim();
