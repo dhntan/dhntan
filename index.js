@@ -49,6 +49,11 @@ app.get('/', (req, res) => {
                 <div class="text-amber-500">🔥 Upper Doom Band: <span id="upper-doom" class="font-bold text-white">...</span></div>
                 <div class="text-cyan-400">💧 Lower Doom Band: <span id="lower-doom" class="font-bold text-white">...</span></div>
             </div>
+            <!-- Bagian Timer Menit yang Dikembalikan -->
+            <div class="text-[11px] text-slate-400 pt-1 border-t border-slate-700/50 flex justify-between">
+                <span>Update Sinyal Terakhir: <span id="last-update-time" class="text-slate-300">...</span></span>
+                <span class="text-amber-400 font-medium">Timer Menit: <span id="countdown-timer" class="font-bold text-white">--m --s</span></span>
+            </div>
         </div>
 
         <!-- Box Histori Sinyal MongoDB -->
@@ -76,6 +81,44 @@ app.get('/', (req, res) => {
 
     <!-- Script Pembaruan Otomatis Dashboard -->
     <script>
+        // Fungsi Hitung Mundur Menit M15 Terbuka
+        function startCountdown() {
+            setInterval(() => {
+                const now = new Date();
+                const minutes = now.getMinutes();
+                const seconds = now.getSeconds();
+                
+                // Menghitung sisa menit menuju kelipatan 15 berikutnya (00, 15, 30, 45)
+                const nextTargetMinutes = Math.ceil((minutes + 0.1) / 15) * 15;
+                let remainingMinutes = nextTargetMinutes - minutes - 1;
+                let remainingSeconds = 60 - seconds;
+                
+                if (remainingSeconds === 60) {
+                    remainingMinutes += 1;
+                    remainingSeconds = 0;
+                }
+                
+                // Jika menit pas kelipatan, reset ke 14 menit 59 detik
+                if (remainingMinutes < 0) {
+                    remainingMinutes = 14;
+                }
+
+                const displayMin = String(remainingMinutes).padStart(2, '0');
+                const displaySec = String(remainingSeconds).padStart(2, '0');
+                
+                const timerEl = document.getElementById('countdown-timer');
+                if (timerEl) {
+                    timerEl.innerText = \`\${displayMin}m \${displaySec}s\`;
+                    // Kasi warna merah kalau sudah di bawah 1 menit biar siaga
+                    if (remainingMinutes === 0) {
+                        timerEl.className = "font-bold text-red-500 animate-pulse";
+                    } else {
+                        timerEl.className = "font-bold text-amber-400";
+                    }
+                }
+            }, 1000);
+        }
+
         async function updateDashboard() {
             try {
                 const res = await fetch('/api/data');
@@ -109,6 +152,11 @@ app.get('/', (req, res) => {
                     mainSignalBadge.style.backgroundColor = data.latest.color || '#6b7280';
 
                     document.getElementById('ai-reason').innerText = data.latest.reason ? "AI: " + data.latest.reason : "";
+                    
+                    // Update teks jam terakhir masuk ke database
+                    if (data.latest.timeStr) {
+                        document.getElementById('last-update-time').innerText = data.latest.timeStr;
+                    }
                 }
 
                 // 3. Update Tabel Sejarah Tanpa Terjadi Undefined
@@ -137,7 +185,10 @@ app.get('/', (req, res) => {
         }
 
         setInterval(updateDashboard, 5000);
-        window.onload = updateDashboard;
+        window.onload = function() {
+            updateDashboard();
+            startCountdown();
+        };
     </script>
 
 </body>
