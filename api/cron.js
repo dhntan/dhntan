@@ -1,3 +1,4 @@
+// FORCE_REDEPLOY_CACHE_BUSTER_V2_2026: true
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
@@ -14,7 +15,8 @@ async function connectToDatabase() {
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-module.exports = async (req, res) => {
+// Mengubah gaya penulisan handler agar Vercel membaca ulang struktur fungsi
+export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
 
@@ -47,7 +49,7 @@ module.exports = async (req, res) => {
 
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
-        let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
+        let aiReason = "Menggunakan mode HTTP aman (Koneksi AI Terputus).";
 
         try {
             if (GEMINI_API_KEY) {
@@ -75,11 +77,11 @@ module.exports = async (req, res) => {
                 if (parsedAi.color) aiColor = parsedAi.color;
                 if (parsedAi.reason) aiReason = parsedAi.reason;
             } else {
-                aiReason = "GEMINI_API_KEY tidak ditemukan di environment Vercel.";
+                aiReason = "Sistem mendeteksi API Key tidak terpasang di Vercel.";
             }
         } catch (aiErr) {
-            console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
-            aiReason = "Gagal memproses Otak AI Gemini via HTTP: " + aiErr.message;
+            console.error("Error Hit HTTP Gemini:", aiErr.message);
+            aiReason = "Respon HTTP Gemini: " + (aiErr.response ? JSON.stringify(aiErr.response.data) : aiErr.message);
         }
 
         const newData = {
@@ -98,10 +100,10 @@ module.exports = async (req, res) => {
         };
 
         await signalCol.insertOne(newData);
-        res.status(200).json({ success: true, message: "Data AI berhasil masuk database!", data: newData });
+        return res.status(200).json({ success: true, message: "Jalur Baru Axios Sukses!", data: newData });
 
     } catch (globalErr) {
         console.error("Error 500 Utama:", globalErr.message);
-        res.status(500).json({ success: false, error: globalErr.message });
+        return res.status(500).json({ success: false, error: globalErr.message });
     }
-};
+}
