@@ -5,19 +5,23 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
     try {
-        // Menggunakan model 'gemini-pro' yang jauh lebih kompatibel
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: "Analisis XAUUSD. Berikan format JSON saja: {\"signal\": \"BUY/SELL/NEUTRAL\", \"color\": \"#10b981\", \"reason\": \"alasan\"}" }] }]
+                contents: [{ parts: [{ text: "Analisis XAUUSD. Berikan format JSON saja: {\"signal\": \"BUY\", \"color\": \"#10b981\", \"reason\": \"test\"}" }] }]
             })
         });
 
         const data = await response.json();
         
-        if (!data.candidates || !data.candidates[0]) {
-            return res.status(500).json({ success: false, debug: data });
+        // JIKA RESPONS TIDAK ADA CANDIDATES, KITA TAMPILKAN ISINYA
+        if (!data.candidates) {
+            return res.status(500).json({ 
+                success: false, 
+                message: "API GAGAL MEMBERIKAN DATA", 
+                raw_response: data // INI AKAN MENUNJUKKAN KENAPA GEMINI MENOLAK
+            });
         }
 
         const rawText = data.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
@@ -30,7 +34,7 @@ module.exports = async (req, res) => {
             ai_data: aiResponse
         });
 
-        return res.status(200).json({ success: true, message: "SUKSES_GEMINI_PRO", data: aiResponse });
+        return res.status(200).json({ success: true, message: "SUKSES", data: aiResponse });
     } catch (e) {
         return res.status(500).json({ success: false, error: e.message });
     }
