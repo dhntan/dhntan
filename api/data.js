@@ -1,4 +1,3 @@
-
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
@@ -19,16 +18,29 @@ module.exports = async (req, res) => {
             console.error(err); 
         }
 
+        // Mengambil 30 data sinyal terbaru dari MongoDB
         const signals = await signalCol.find().sort({ timestamp: -1 }).limit(30).toArray();
+        
+        // Memastikan jika ada data lama yang strukturnya berbeda agar tidak memunculkan undefined
+        const formattedSignals = signals.map(s => ({
+            timeStr: s.timeStr || (s.timestamp ? new Date(s.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + " WIB" : "..."),
+            closePrice: s.closePrice || (s.price ? parseFloat(s.price).toFixed(2) : livePrice),
+            signal: s.signal || "NEUTRAL",
+            color: s.color || "#6b7280"
+        }));
+
         const latestSignal = signals[0] || {
-            signal: 'WAITING M15...', color: '#6b7280', iteration: 0,
+            signal: 'WAITING M15...', color: '#6b7280',
             ema9: '...', ema21: '...', rsi14: '...', atr14: '...',
             upperDoom: '...', lowerDoom: '...'
         };
 
-        // Mengizinkan browser mengakses API ini dari folder luar
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.json({ livePrice, signals, latest: latestSignal });
+        res.json({ 
+            livePrice, 
+            signals: formattedSignals, 
+            latest: latestSignal 
+        });
     } catch (e) { 
         res.status(500).json({ error: e.message }); 
     }
