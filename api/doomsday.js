@@ -5,7 +5,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        // Menggunakan model 'gemini-pro' yang jauh lebih kompatibel
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -15,7 +16,6 @@ module.exports = async (req, res) => {
 
         const data = await response.json();
         
-        // Cek log respons untuk debug jika masih error
         if (!data.candidates || !data.candidates[0]) {
             return res.status(500).json({ success: false, debug: data });
         }
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
             ai_data: aiResponse
         });
 
-        return res.status(200).json({ success: true, message: "SUKSES", data: aiResponse });
+        return res.status(200).json({ success: true, message: "SUKSES_GEMINI_PRO", data: aiResponse });
     } catch (e) {
         return res.status(500).json({ success: false, error: e.message });
     }
