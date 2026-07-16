@@ -3,7 +3,7 @@ const axios = require('axios');
 
 // Konfigurasi MongoDB & Gemini API
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const GEMINI_API_KEY = "AIzaSy..." // <-- PASTIKAN MASUKKAN API KEY GEMINI BAPAK DI SINI
+const GEMINI_API_KEY = "AQ.Ab8RN6LVPwYyy_NwI_km2Mi8VxvI_dWWnbVgt7bwInkYygqRUg" // <-- PASTIKAN MASUKKAN API KEY GEMINI BAPAK DI SINI
 
 const client = new MongoClient(uri);
 
