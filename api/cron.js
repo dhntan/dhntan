@@ -1,7 +1,7 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
-// PERBAIKAN: Import langsung tanpa tanda kurung kurawal {}
-const GoogleGenAI = require('@google/generative-ai');
+// Menggunakan penamaan versi legasi standar Node.js
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Koneksi ke database asli
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
@@ -51,43 +51,34 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Proses Otak Gemini
+        // 3. Proses Otak Gemini menggunakan SDK Versi Stabil
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
-            if (GEMINI_API_KEY && GoogleGenAI) {
-                // Mengamankan inisialisasi baik jika berbentuk Class maupun Object Helper
-                let ai;
-                if (typeof GoogleGenAI === 'function') {
-                    ai = new GoogleGenAI(GEMINI_API_KEY);
-                } else if (GoogleGenAI.GoogleGenAI) {
-                    ai = new GoogleGenAI.GoogleGenAI(GEMINI_API_KEY);
-                } else if (GoogleGenAI.fromApiKey) {
-                    ai = GoogleGenAI.fromApiKey(GEMINI_API_KEY);
+            if (GEMINI_API_KEY && GoogleGenerativeAI) {
+                // Inisialisasi menggunakan kelas bawaan paket versi stabil
+                const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                
+                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
+                
+                const result = await model.generateContent(promptText);
+                const response = await result.response;
+                let rawText = response.text().trim();
+                
+                if (rawText.includes("```")) {
+                    rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
                 }
 
-                if (ai) {
-                    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                    
-                    const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
-                    
-                    const response = await model.generateContent(promptText);
-                    let rawText = response.text ? response.text.trim() : (response.response ? response.response.text().trim() : "");
-                    
-                    if (rawText.includes("```")) {
-                        rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-                    }
+                const parsedAi = JSON.parse(rawText);
 
-                    const parsedAi = JSON.parse(rawText);
-
-                    if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
-                    if (parsedAi.color) aiColor = parsedAi.color;
-                    if (parsedAi.reason) aiReason = parsedAi.reason;
-                } else {
-                    aiReason = "Gagal memetakan modul SDK GoogleGenAI.";
-                }
+                if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
+                if (parsedAi.color) aiColor = parsedAi.color;
+                if (parsedAi.reason) aiReason = parsedAi.reason;
+            } else {
+                aiReason = "Modul SDK GoogleGenerativeAI tidak terdefinisi di Vercel.";
             }
         } catch (aiErr) {
             console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
