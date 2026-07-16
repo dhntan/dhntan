@@ -1,4 +1,4 @@
-// FORCE_REDEPLOY_CACHE_BUSTER_V2_2026: true
+// CACHE_BREAKER_PROD_V3: true
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
@@ -15,8 +15,7 @@ async function connectToDatabase() {
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Mengubah gaya penulisan handler agar Vercel membaca ulang struktur fungsi
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
 
@@ -49,7 +48,7 @@ export default async function handler(req, res) {
 
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
-        let aiReason = "Menggunakan mode HTTP aman (Koneksi AI Terputus).";
+        let aiReason = "Menggunakan jalur HTTP langsung (AI Terputus).";
 
         try {
             if (GEMINI_API_KEY) {
@@ -77,10 +76,10 @@ export default async function handler(req, res) {
                 if (parsedAi.color) aiColor = parsedAi.color;
                 if (parsedAi.reason) aiReason = parsedAi.reason;
             } else {
-                aiReason = "Sistem mendeteksi API Key tidak terpasang di Vercel.";
+                aiReason = "GEMINI_API_KEY belum terpasang di Vercel Production.";
             }
         } catch (aiErr) {
-            console.error("Error Hit HTTP Gemini:", aiErr.message);
+            console.error("Error HTTP Gemini:", aiErr.message);
             aiReason = "Respon HTTP Gemini: " + (aiErr.response ? JSON.stringify(aiErr.response.data) : aiErr.message);
         }
 
@@ -100,10 +99,16 @@ export default async function handler(req, res) {
         };
 
         await signalCol.insertOne(newData);
-        return res.status(200).json({ success: true, message: "Jalur Baru Axios Sukses!", data: newData });
+        
+        // Pembeda teks sukses untuk memastikan kode baru aktif!
+        return res.status(200).json({ 
+            success: true, 
+            message: "FIX PROD: HTTP Axios Sukses Tembus!", 
+            data: newData 
+        });
 
     } catch (globalErr) {
         console.error("Error 500 Utama:", globalErr.message);
         return res.status(500).json({ success: false, error: globalErr.message });
     }
-}
+};
