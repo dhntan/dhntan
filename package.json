@@ -5,9 +5,9 @@
   "scripts": {
     "start": "node index.js"
   },
-"dependencies": {
-  "@google/generative-ai": "^0.1.0",
-  "axios": "^1.6.0",
-  "mongodb": "^6.3.0"
-}
+  "dependencies": {
+    "@google/generative-ai": "^0.1.0",
+    "axios": "^1.6.0",
+    "mongodb": "^6.3.0"
+  }
 }
