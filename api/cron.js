@@ -1,58 +1,107 @@
 const { GoogleGenAI } = require('@google/generative-ai');
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
-const { RSI, ATR } = require('technicalindicators');
 
 // Konfigurasi MongoDB dan Gemini API dari Environment Variables
 const mongoUri = process.env.MONGODB_URI;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
+// FUNGSI MANUAL UNTUK MENGHITUNG RSI (14)
+function calculateRSI(prices, period = 14) {
+  if (prices.length <= period) return 50.00;
+  
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i <= period; i++) {
+    let diff = prices[i] - prices[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  for (let i = period + 1; i < prices.length; i++) {
+    let diff = prices[i] - prices[i - 1];
+    if (diff > 0) {
+      avgGain = (avgGain * (period - 1) + diff) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) - diff) / period;
+    }
+  }
+
+  if (avgLoss === 0) return 100;
+  let rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+// FUNGSI MANUAL UNTUK MENGHITUNG ATR (14)
+function calculateATR(highs, lows, closes, period = 14) {
+  if (closes.length <= period) return 3.50;
+
+  let trs = [];
+  for (let i = 1; i < closes.length; i++) {
+    let hl = highs[i] - lows[i];
+    let hpc = Math.abs(highs[i] - closes[i - 1]);
+    let lpc = Math.abs(lows[i] - closes[i - 1]);
+    trs.push(Math.max(hl, hpc, lpc));
+  }
+
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += trs[i];
+  }
+  let atr = sum / period;
+
+  for (let i = period; i < trs.length; i++) {
+    atr = (atr * (period - 1) + trs[i]) / period;
+  }
+  return atr;
+}
+
 module.exports = async (req, res) => {
   try {
     // 1. AMBIL DATA HISTORI CANDLE M15 DARI COINBASE (PAXG-USD)
-    // Granularity 900 artinya timeframe 15 menit (15 * 60 detik)
     const marketResponse = await axios.get('https://api.exchange.coinbase.com/products/PAXG-USD/candles?granularity=900', {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
-    const candles = marketResponse.data; // Format Coinbase: [time, low, high, open, close, volume]
+    const candles = marketResponse.data;
 
     if (!candles || candles.length < 20) {
-      throw new Error("Gagal mengambil histori candle yang cukup dari Coinbase API");
+      throw new Error("Gagal mengambil histori candle dari Coinbase");
     }
 
-    // Ambil harga penutupan candle paling terakhir (Live Price)
     const livePrice = parseFloat(candles[0][4]).toFixed(2);
 
-    // Susun array histori harga dari yang terlama ke terbaru (Coinbase mengembalikan dari baru ke lama, jadi harus di-reverse)
+    // Coinbase mengembalikan dari baru ke lama, kita reverse agar berurutan kronologis (lama ke baru)
     const closePrices = candles.map(c => parseFloat(c[4])).reverse();
     const highPrices = candles.map(c => parseFloat(c[2])).reverse();
     const lowPrices = candles.map(c => parseFloat(c[1])).reverse();
 
-    // 2. HITUNG INDIKATOR SECARA REAL-TIME DENGAN LIBRARY
-    const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
-    const atrValues = ATR.calculate({ high: highPrices, low: lowPrices, close: closePrices, period: 14 });
+    // 2. HITUNG INDIKATOR SECARA MANUAL (NATIVE JAVASCRIPT)
+    const rsi14 = calculateRSI(closePrices, 14).toFixed(2);
+    const atr14 = calculateATR(highPrices, lowPrices, closePrices, 14).toFixed(2);
 
-    // Ambil nilai paling ujung/terbaru dari hasil kalkulasi
-    const rsi14 = rsiValues[rsiValues.length - 1].toFixed(2);
-    const atr14 = atrValues[atrValues.length - 1].toFixed(2);
-
-    // Hitung indikator pendukung lainnya (EMA & Doom Band) secara dinamis berbasis volatilitas ATR
+    // Hitung indikator pendukung lainnya secara dinamis
     const ema9 = (livePrice * 0.999).toFixed(2);
     const ema21 = (livePrice * 1.001).toFixed(2);
     const upperDoom = (parseFloat(livePrice) + (parseFloat(atr14) * 4.28)).toFixed(2);
     const lowerDoom = (parseFloat(livePrice) - (parseFloat(atr14) * 4.28)).toFixed(2);
 
-    // 3. SET TIME STAMP WIB (JAKARTA)
+    // 3. SET TIME STAMP WIB
     const now = new Date();
     const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const wibTime = new Date(utcTime + (3600000 * 7)); // UTC + 7 Jam
+    const wibTime = new Date(utcTime + (3600000 * 7));
     
     const hours = String(wibTime.getHours()).padStart(2, '0');
     const minutes = String(wibTime.getMinutes()).padStart(2, '0');
     const timeStr = `${hours}.${minutes} WIB`;
     const timestamp = wibTime.getTime();
 
-    // 4. PROSES OTAK AI GEMINI (UNTUK BERPIKIR DAN MENENTUKAN SINYAL)
+    // 4. PROSES OTAK AI GEMINI
     let aiSignal = "NEUTRAL";
     let aiColor = "#6b7280";
     let aiReason = "Gagal memproses Otak AI Gemini";
@@ -102,7 +151,7 @@ module.exports = async (req, res) => {
     await collection.insertOne(dataToSave);
     await client.close();
 
-    // 6. KIRIM RESPONS SUKSES KE SCREEN VERCEL
+    // 6. KIRIM RESPONS SUKSES
     return res.status(200).json({
       success: true,
       message: "Data AI berhasil masuk database!",
