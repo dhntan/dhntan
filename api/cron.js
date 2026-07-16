@@ -9,24 +9,24 @@ const geminiApiKey = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
   try {
-    // 1. AMBIL DATA HISTORI CANDLE M15 DARI MEXC API (BEBAS BLOKIR WILAYAH SERVER)
-    // Mengambil 50 candle terakhir untuk akurasi hitungan RSI(14) dan ATR(14)
-    const marketResponse = await axios.get('https://api.mexc.com/api/v3/klines?symbol=PAXGUSDT&interval=15m&limit=50');
-    const candles = marketResponse.data;
-    // Format response MEXC: [ [open_time, open, high, low, close, volume, close_time, ...] ]
+    // 1. AMBIL DATA HISTORI CANDLE M15 DARI COINBASE (PAXG-USD)
+    // Granularity 900 artinya timeframe 15 menit (15 * 60 detik)
+    const marketResponse = await axios.get('https://api.exchange.coinbase.com/products/PAXG-USD/candles?granularity=900', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const candles = marketResponse.data; // Format Coinbase: [time, low, high, open, close, volume]
 
     if (!candles || candles.length < 20) {
-      throw new Error("Gagal mengambil histori candle yang cukup dari MEXC API");
+      throw new Error("Gagal mengambil histori candle yang cukup dari Coinbase API");
     }
 
-    // Ambil candle paling terakhir (indeks terakhir di array MEXC adalah candle terbaru)
-    const latestCandle = candles[candles.length - 1];
-    const livePrice = parseFloat(latestCandle[4]).toFixed(2); // close price
+    // Ambil harga penutupan candle paling terakhir (Live Price)
+    const livePrice = parseFloat(candles[0][4]).toFixed(2);
 
-    // Susun array histori harga dari yang lama ke yang baru
-    const closePrices = candles.map(c => parseFloat(c[4]));
-    const highPrices = candles.map(c => parseFloat(c[2]));
-    const lowPrices = candles.map(c => parseFloat(c[3]));
+    // Susun array histori harga dari yang terlama ke terbaru (Coinbase mengembalikan dari baru ke lama, jadi harus di-reverse)
+    const closePrices = candles.map(c => parseFloat(c[4])).reverse();
+    const highPrices = candles.map(c => parseFloat(c[2])).reverse();
+    const lowPrices = candles.map(c => parseFloat(c[1])).reverse();
 
     // 2. HITUNG INDIKATOR SECARA REAL-TIME DENGAN LIBRARY
     const rsiValues = RSI.calculate({ values: closePrices, period: 14 });
@@ -66,7 +66,6 @@ module.exports = async (req, res) => {
       const aiResponse = await model.generateContent(promptText);
       let cleanText = aiResponse.response.text().trim();
 
-      // Filter pembersih otomatis jika AI membungkus JSON dengan markdown ```json ... ```
       if (cleanText.includes("```")) {
         cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
       }
