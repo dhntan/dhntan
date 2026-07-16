@@ -1,16 +1,13 @@
 {
-  "name": "doomsday-bot",
+  "name": "bot-emas-doomsday",
   "version": "1.0.0",
-  "description": "Bot analisis market XAUUSD",
-  "main": "api/cron.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node api/cron.js"
+    "start": "node index.js"
   },
-  "dependencies": {
-    "@google/generative-ai": "^0.1.0",
-    "mongodb": "^6.5.0"
-  },
-  "engines": {
-    "node": ">=18.x"
-  }
+ "dependencies": {
+  "@google/generative-ai": "^0.1.0",
+  "axios": "^1.6.0",
+  "mongodb": "^6.3.0"
+}
 }
