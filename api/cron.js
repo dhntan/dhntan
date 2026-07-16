@@ -1,6 +1,7 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
-const { GoogleGenAI } = require('@google/generative-ai');
+// PERBAIKAN: Import langsung tanpa tanda kurung kurawal {}
+const GoogleGenAI = require('@google/generative-ai');
 
 // Koneksi ke database asli
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
@@ -50,43 +51,43 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Proses Otak Gemini menggunakan format pemanggilan universal bypass constructor
+        // 3. Proses Otak Gemini
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
-            if (GEMINI_API_KEY) {
-                // Perbaikan radikal: panggil lewat fungsi package internal langsung untuk menghindari error constructor
-                const ai = GoogleGenAI.fromApiKey ? GoogleGenAI.fromApiKey(GEMINI_API_KEY) : new GoogleGenAI(GEMINI_API_KEY);
-                
-                // Cari method model yang tersedia pada instance
-                const model = ai.getGenerativeModel ? ai.getGenerativeModel({ model: 'gemini-1.5-flash' }) : ai.models.get({ model: 'gemini-1.5-flash' });
-                
-                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
-                
-                let response;
-                if (model.generateContent) {
-                    response = await model.generateContent(promptText);
+            if (GEMINI_API_KEY && GoogleGenAI) {
+                // Mengamankan inisialisasi baik jika berbentuk Class maupun Object Helper
+                let ai;
+                if (typeof GoogleGenAI === 'function') {
+                    ai = new GoogleGenAI(GEMINI_API_KEY);
+                } else if (GoogleGenAI.GoogleGenAI) {
+                    ai = new GoogleGenAI.GoogleGenAI(GEMINI_API_KEY);
+                } else if (GoogleGenAI.fromApiKey) {
+                    ai = GoogleGenAI.fromApiKey(GEMINI_API_KEY);
+                }
+
+                if (ai) {
+                    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                    
+                    const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
+                    
+                    const response = await model.generateContent(promptText);
+                    let rawText = response.text ? response.text.trim() : (response.response ? response.response.text().trim() : "");
+                    
+                    if (rawText.includes("```")) {
+                        rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+                    }
+
+                    const parsedAi = JSON.parse(rawText);
+
+                    if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
+                    if (parsedAi.color) aiColor = parsedAi.color;
+                    if (parsedAi.reason) aiReason = parsedAi.reason;
                 } else {
-                    response = await ai.models.generateContent({
-                        model: 'gemini-1.5-flash',
-                        contents: promptText,
-                        config: { apiKey: GEMINI_API_KEY }
-                    });
+                    aiReason = "Gagal memetakan modul SDK GoogleGenAI.";
                 }
-
-                let rawText = response.text ? response.text.trim() : (response.response ? response.response.text().trim() : "");
-                
-                if (rawText.includes("```")) {
-                    rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-                }
-
-                const parsedAi = JSON.parse(rawText);
-
-                if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
-                if (parsedAi.color) aiColor = parsedAi.color;
-                if (parsedAi.reason) aiReason = parsedAi.reason;
             }
         } catch (aiErr) {
             console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
