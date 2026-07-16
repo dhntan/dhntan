@@ -4,8 +4,8 @@ const axios = require('axios');
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 const client = new MongoClient(uri);
 
-// GANTI DENGAN API KEY GEMINI BAPAK YANG ASLI
-const GEMINI_API_KEY = "MASUKKAN_API_KEY_GEMINI_DI_SINI"; 
+// GANTI DENGAN API KEY GEMINI BAPAK YANG ASLI (Jangan masukkan teks URL kodenya)
+const GEMINI_API_KEY = "AQ.Ab8RN6LWCr6NhtuwqHLEqp2amYFqBYFo-fmidWrAAn1dBH18Gg"; 
 
 module.exports = async (req, res) => {
     // Pengaman header untuk serverless function
