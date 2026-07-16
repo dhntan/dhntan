@@ -50,23 +50,33 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Proses Otak Gemini menggunakan inisialisasi constructor yang benar
+        // 3. Proses Otak Gemini menggunakan format pemanggilan universal bypass constructor
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
             if (GEMINI_API_KEY) {
-                // Inisialisasi standar: masukkan API KEY langsung ke constructor utama
-                const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+                // Perbaikan radikal: panggil lewat fungsi package internal langsung untuk menghindari error constructor
+                const ai = GoogleGenAI.fromApiKey ? GoogleGenAI.fromApiKey(GEMINI_API_KEY) : new GoogleGenAI(GEMINI_API_KEY);
                 
-                // Panggil model via getGenerativeModel
-                const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                // Cari method model yang tersedia pada instance
+                const model = ai.getGenerativeModel ? ai.getGenerativeModel({ model: 'gemini-1.5-flash' }) : ai.models.get({ model: 'gemini-1.5-flash' });
                 
                 const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
                 
-                const response = await model.generateContent(promptText);
-                let rawText = response.text.trim();
+                let response;
+                if (model.generateContent) {
+                    response = await model.generateContent(promptText);
+                } else {
+                    response = await ai.models.generateContent({
+                        model: 'gemini-1.5-flash',
+                        contents: promptText,
+                        config: { apiKey: GEMINI_API_KEY }
+                    });
+                }
+
+                let rawText = response.text ? response.text.trim() : (response.response ? response.response.text().trim() : "");
                 
                 if (rawText.includes("```")) {
                     rawText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
