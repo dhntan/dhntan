@@ -2,18 +2,24 @@ const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const client = new MongoClient(uri);
+let cachedClient = null;
 
-// GANTI DENGAN API KEY GEMINI BAPAK YANG ASLI (Jangan masukkan teks URL kodenya)
+async function connectToDatabase() {
+    if (cachedClient) return cachedClient;
+    const client = new MongoClient(uri);
+    await client.connect();
+    cachedClient = client;
+    return client;
+}
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
-    // Pengaman header untuk serverless function
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
 
     try {
-        await client.connect();
+        const client = await connectToDatabase();
         const db = client.db('doomsday_bot');
         const signalCol = db.collection('signal_history_m15');
 
@@ -42,34 +48,37 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini API (Menggunakan Model 1.5-Flash yang Lebih Stabil)
+        // 3. Tembak Gemini API (Gunakan endpoint v1 dan model yang lebih spesifik)
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
-            if (GEMINI_API_KEY && GEMINI_API_KEY !== "MASUKKAN_API_KEY_GEMINI_DI_SINI") {
-                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons dalam format JSON mentah murni tanpa markdown: {"signal": "BUY"/"SELL"/"NEUTRAL", "color": "warna_hex", "reason": "alasan singkat maksimal 15 kata"}`;
+            if (GEMINI_API_KEY) {
+                const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons dalam format JSON murni: {"signal": "BUY"/"SELL"/"NEUTRAL", "color": "#warna_hex", "reason": "alasan singkat maksimal 15 kata"}`;
                 
+                // Perubahan endpoint ke v1/gemini-1.5-flash-latest demi kestabilan format AQ key Bapak
                 const geminiRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+                    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
                     {
-                        contents: [{ parts: [{ text: promptText }] }]
+                        contents: [{ parts: [{ text: promptText }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json" // Memaksa Gemini merespons JSON bersih tanpa markdown ```json
+                        }
                     },
-                    { timeout: 7000 } // Batasi waktu tunggu 7 detik agar tidak timeout global
+                    { timeout: 9000 }
                 );
 
-                const rawText = geminiRes.data.candidates[0].content.parts[0].text;
-                const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsedAi = JSON.parse(cleanJson);
+                const rawText = geminiRes.data.candidates[0].content.parts[0].text.trim();
+                const parsedAi = JSON.parse(rawText);
 
-                if (parsedAi.signal) aiSignal = parsedAi.signal;
+                if (parsedAi.signal) aiSignal = parsedAi.signal.toUpperCase();
                 if (parsedAi.color) aiColor = parsedAi.color;
                 if (parsedAi.reason) aiReason = parsedAi.reason;
             }
         } catch (aiErr) {
             console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
-            // Tetap lanjut agar data indikator & harga di bawah ini tetap tersimpan ke MongoDB
+            aiReason = "Gagal memproses Otak AI Gemini: " + aiErr.message;
         }
 
         // 4. Susun Objek Data Baru
@@ -91,14 +100,11 @@ module.exports = async (req, res) => {
         // Simpan ke Database
         await signalCol.insertOne(newData);
 
-        // Kirim response sukses ke browser / UptimeRobot
         res.status(200).json({ success: true, message: "Data baru berhasil masuk database!", data: newData });
 
     } catch (globalErr) {
         console.error("Error 500 Utama:", globalErr.message);
         res.status(500).json({ success: false, error: globalErr.message });
-    } finally {
-        // Tutup koneksi agar resource MongoDB tidak menggantung
-        await client.close();
     }
+    // BLOK FINALLY CLIENT.CLOSE() DIBUANG AGAR KONEKSI MONGODB STABIL
 };
