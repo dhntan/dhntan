@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Tembak Gemini API dengan Alamat Endpoint Resmi v1/models/gemini-1.5-flash
+        // 3. Tembak Gemini API dengan Endpoint v1beta yang diperbaiki modelnya
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
@@ -57,9 +57,9 @@ module.exports = async (req, res) => {
             if (GEMINI_API_KEY) {
                 const promptText = `Analisis market XAUUSD saat ini. Harga: $${livePrice}, RSI: ${rsi14}, EMA9: ${ema9}, EMA21: ${ema21}. Berikan respons DALAM FORMAT JSON SAJA seperti ini: {"signal": "BUY", "color": "#10b981", "reason": "alasan singkat"}. Jangan ketik teks lain selain objek JSON tersebut.`;
                 
-                // URL diubah menjadi /v1/models/gemini-1.5-flash (Tanpa kata "-latest")
+                // Menggunakan endpoint v1beta kembali, namun dengan model target 'gemini-1.5-flash' murni tanpa embel-embel
                 const geminiRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                     {
                         contents: [{ parts: [{ text: promptText }] }]
                     },
