@@ -1,13 +1,16 @@
 {
-  "name": "bot-emas-doomsday",
+  "name": "doomsday-bot",
   "version": "1.0.0",
+  "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.1.0",
-    "axios": "^1.6.0",
-    "mongodb": "^6.3.0"
+    "express": "^4.19.2",
+    "mongodb": "^6.5.0"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
