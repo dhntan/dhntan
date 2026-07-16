@@ -4,10 +4,12 @@ const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mong
 const client = new MongoClient(uri);
 
 module.exports = async (req, res) => {
-    // Header pengaman & anti-cache
+    // HEADER DIBAWAH INI AKAN MEMAKSA VERCEL UNTUK TIDAK MENYIMPAN CACHE SAMA SEKALI
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     try {
         await client.connect();
@@ -21,7 +23,6 @@ module.exports = async (req, res) => {
             .limit(20)
             .toArray();
 
-        // KUNCI COCOK: Bungkus data sesuai struktur yang diminta oleh index.js Bapak
         const latestRecord = historyData[0] || {};
         const livePriceData = latestRecord.closePrice || '...';
 
