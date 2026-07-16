@@ -9,21 +9,21 @@ const geminiApiKey = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
   try {
-    // 1. AMBIL DATA HARGA & HISTORI CANDLE M15 DARI BINANCE (PAXG-USDT)
-    // limit=50 mengambil 50 candle terakhir untuk akurasi hitungan RSI(14) dan ATR(14)
-    const marketResponse = await axios.get('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=15m&limit=50');
-    const candles = marketResponse.data; 
-    // Format response Binance: [ [open_time, open, high, low, close, volume, close_time, ...] ]
+    // 1. AMBIL DATA HISTORI CANDLE M15 DARI MEXC API (BEBAS BLOKIR WILAYAH SERVER)
+    // Mengambil 50 candle terakhir untuk akurasi hitungan RSI(14) dan ATR(14)
+    const marketResponse = await axios.get('https://api.mexc.com/api/v3/klines?symbol=PAXGUSDT&interval=15m&limit=50');
+    const candles = marketResponse.data;
+    // Format response MEXC: [ [open_time, open, high, low, close, volume, close_time, ...] ]
 
     if (!candles || candles.length < 20) {
-      throw new Error("Gagal mengambil histori candle yang cukup dari Binance API");
+      throw new Error("Gagal mengambil histori candle yang cukup dari MEXC API");
     }
 
-    // Ambil candle paling terakhir (indeks terakhir di array Binance adalah candle terbaru)
+    // Ambil candle paling terakhir (indeks terakhir di array MEXC adalah candle terbaru)
     const latestCandle = candles[candles.length - 1];
     const livePrice = parseFloat(latestCandle[4]).toFixed(2); // close price
 
-    // Susun array histori harga dari yang lama ke yang baru (Binance sudah berurutan otomatis)
+    // Susun array histori harga dari yang lama ke yang baru
     const closePrices = candles.map(c => parseFloat(c[4]));
     const highPrices = candles.map(c => parseFloat(c[2]));
     const lowPrices = candles.map(c => parseFloat(c[3]));
