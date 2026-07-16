@@ -1,4 +1,8 @@
-module.exports = (req, res) => {
+const express = require('express');
+const app = express();
+const path = require('path');
+
+app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.send(`
 <!DOCTYPE html>
@@ -87,7 +91,6 @@ module.exports = (req, res) => {
                     document.getElementById('ema-fast').innerText = data.latest.ema9 || '...';
                     document.getElementById('ema-slow').innerText = data.latest.ema21 || '...';
                     
-                    // Mewarnai teks RSI berdasarkan kondisi ekstrim
                     const rsiEl = document.getElementById('rsi-val');
                     rsiEl.innerText = data.latest.rsi14 || '...';
                     if(data.latest.rsi14 && data.latest.rsi14 !== '...') {
@@ -101,12 +104,10 @@ module.exports = (req, res) => {
                     document.getElementById('upper-doom').innerText = data.latest.upperDoom || '...';
                     document.getElementById('lower-doom').innerText = data.latest.lowerDoom || '...';
                     
-                    // Update Sinyal Utama
                     const mainSignalBadge = document.getElementById('main-signal');
                     mainSignalBadge.innerText = data.latest.signal || 'NEUTRAL';
                     mainSignalBadge.style.backgroundColor = data.latest.color || '#6b7280';
 
-                    // Tampilkan Alasan Berpikir Otak AI
                     document.getElementById('ai-reason').innerText = data.latest.reason ? "AI: " + data.latest.reason : "";
                 }
 
@@ -135,7 +136,6 @@ module.exports = (req, res) => {
             }
         }
 
-        // Interval refresh cepat tiap 5 detik
         setInterval(updateDashboard, 5000);
         window.onload = updateDashboard;
     </script>
@@ -143,4 +143,6 @@ module.exports = (req, res) => {
 </body>
 </html>
     `);
-};
+});
+
+module.exports = app;
