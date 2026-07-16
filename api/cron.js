@@ -5,7 +5,7 @@ const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mong
 const client = new MongoClient(uri);
 
 // GANTI DENGAN API KEY GEMINI BAPAK YANG ASLI (Jangan masukkan teks URL kodenya)
-const GEMINI_API_KEY = "AQ.Ab8RN6LWCr6NhtuwqHLEqp2amYFqBYFo-fmidWrAAn1dBH18Gg"; 
+const GEMINI_API_KEY = "AQ.Ab8RN6K4aCa6dgTs-oYYuDB7FLt42vjJI88xabP9gvdnTF0G4g"; 
 
 module.exports = async (req, res) => {
     // Pengaman header untuk serverless function
