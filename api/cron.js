@@ -1,36 +1,62 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
+// Konfigurasi MongoDB & Gemini API
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const GEMINI_API_KEY = "AIzaSy..." // <-- PASTIKAN MASUKKAN API KEY GEMINI BAPAK DI SINI
+
 const client = new MongoClient(uri);
 
+// Fungsi Indikator Matematika Dasar
 function calcEMA(data, period) {
-    if(data.length === 0) return 0;
-    let k = 2 / (period + 1);
+    if (data.length < period) return NaN;
+    const k = 2 / (period + 1);
     let ema = data[0];
-    for (let i = 1; i < data.length; i++) { ema = data[i] * k + ema * (1 - k); }
+    for (let i = 1; i < data.length; i++) {
+        ema = data[i] * k + ema * (1 - k);
+    }
     return ema;
 }
 
 function calcRSI(data, period = 14) {
-    if (data.length < period + 1) return 50;
+    if (data.length < period + 1) return NaN;
     let gains = 0, losses = 0;
-    for (let i = data.length - period; i < data.length; i++) {
-        let diff = data[i] - data[i - 1];
-        if (diff > 0) gains += diff; else losses -= diff;
+    for (let i = 1; i <= period; i++) {
+        const diff = data[i] - data[i - 1];
+        if (diff > 0) gains += diff;
+        else losses -= Math.abs(diff);
     }
-    let rs = (gains / period) / ((losses / period) || 1);
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+    for (let i = period + 1; i < data.length; i++) {
+        const diff = data[i] - data[i - 1];
+        if (diff > 0) {
+            avgGain = (avgGain * 13 + diff) / 14;
+            avgLoss = (avgLoss * 13) / 14;
+        } else {
+            avgGain = (avgGain * 13) / 14;
+            avgLoss = (avgLoss * 13 + Math.abs(diff)) / 14;
+        }
+    }
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
     return 100 - (100 / (1 + rs));
 }
 
-function calcATR(prices, period = 14) {
-    if(prices.length < 2) return 2.5;
+function calcATR(highs, lows, closes, period = 14) {
+    if (closes.length < period + 1) return NaN;
     let trs = [];
-    let start = Math.max(1, prices.length - period);
-    for(let i = start; i < prices.length; i++){
-        trs.push(Math.abs(prices[i] - prices[i-1]));
+    for (let i = 1; i < closes.length; i++) {
+        const h_l = highs[i] - lows[i];
+        const h_pc = Math.abs(highs[i] - closes[i - 1]);
+        const l_pc = Math.abs(lows[i] - closes[i - 1]);
+        trs.push(Math.max(h_l, h_pc, l_pc));
     }
-    return trs.reduce((a,b)=>a+b, 0) / (trs.length || 1);
+    let atr = trs.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < trs.length; i++) {
+        atr = (atr * (period - 1) + trs[i]) / period;
+    }
+    return atr;
 }
 
 module.exports = async (req, res) => {
@@ -39,100 +65,115 @@ module.exports = async (req, res) => {
         const db = client.db('doomsday_bot');
         const priceCol = db.collection('price_history_m15');
         const signalCol = db.collection('signal_history_m15');
-        const brainCol = db.collection('brain_weights');
 
+        // 1. Ambil harga Live PAXG/USD dari Coinbase
         const response = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
-        if (!response.data || !response.data.data || !response.data.data.amount) {
-            return res.status(500).send("Gagal mengambil harga");
-        }
         const currentPrice = parseFloat(response.data.data.amount);
-        const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB';
-        
-        await priceCol.insertOne({ price: currentPrice, timestamp: new Date() });
 
-        let brain = await brainCol.findOne({ id: "gold_brain" });
-        if (!brain) {
-            brain = { 
-                id: "gold_brain", total_errors: 0, 
-                ema_fast: 9, ema_slow: 21, rsi_period: 14, 
-                rsi_buy_level: 55, rsi_sell_level: 45, doom_mult: 2.0 
-            };
-            await brainCol.insertOne(brain);
+        // Simulasi High/Low sederhana untuk kebutuhan ATR dasar
+        const highPrice = currentPrice * 1.0005;
+        const lowPrice = currentPrice * 0.9995;
+        const timestamp = new Date();
+
+        // 2. Simpan harga baru ke riwayat database
+        await priceCol.insertOne({ 
+            price: currentPrice, 
+            high: highPrice, 
+            low: lowPrice, 
+            timestamp 
+        });
+
+        // 3. Tarik data riwayat untuk kalkulasi indikator
+        const history = await priceCol.find().sort({ timestamp: 1 }).toArray();
+        const closes = history.map(h => h.price);
+        const highs = history.map(h => h.high);
+        const lows = history.map(h => h.low);
+
+        // Hitung nilai teknikal dasar
+        const ema9 = calcEMA(closes, 9);
+        const ema21 = calcEMA(closes, 21);
+        const rsi14 = calcRSI(closes, 14);
+        const atr14 = calcATR(highs, lows, closes, 14);
+
+        let upperDoom = NaN;
+        let lowerDoom = NaN;
+        if (!isNaN(ema21) && !isNaN(atr14)) {
+            upperDoom = ema21 + (atr14 * 1.5);
+            lowerDoom = ema21 - (atr14 * 1.5);
         }
 
-        const lastSignalDoc = await signalCol.find().sort({ timestamp: -1 }).limit(1).toArray();
-        let wasError = false;
+        // Ambil 5 riwayat harga terakhir untuk referensi visual AI
+        const recentPrices = closes.slice(-5).join(', ');
 
-        if (lastSignalDoc.length > 0) {
-            const ls = lastSignalDoc[0];
-            const oldPrice = parseFloat(ls.price);
-            
-            if (ls.signal.includes("BUY") && currentPrice < oldPrice) wasError = true;
-            if (ls.signal.includes("SELL") && currentPrice > oldPrice) wasError = true;
+        // DEFAULT awal jika AI gagal merespons atau data masih NaN
+        let aiSignal = "NEUTRAL";
+        let aiColor = "#6b7280"; 
+        let aiReason = "Mengumpulkan data awal market.";
 
-            if (wasError) {
-                brain.total_errors += 1;
-                brain.ema_fast = Math.floor(Math.random() * (12 - 7 + 1)) + 7;
-                brain.ema_slow = Math.floor(Math.random() * (30 - 18 + 1)) + 18;
-                brain.rsi_period = Math.floor(Math.random() * (16 - 10 + 1)) + 10;
-                brain.rsi_buy_level = Math.floor(Math.random() * (62 - 52 + 1)) + 52;
-                brain.rsi_sell_level = Math.floor(Math.random() * (48 - 38 + 1)) + 38;
-                brain.doom_mult = parseFloat((Math.random() * (2.5 - 1.8) + 1.8).toFixed(2));
+        // 4. OTAK AI GEMINI PROMPT (Hanya bekerja jika data indikator sudah valid/bukan NaN)
+        if (!isNaN(ema9) && !isNaN(ema21) && !isNaN(rsi14)) {
+            const promptText = `
+            Anda adalah Otak AI Pro Trading Khusus Emas (XAUUSD).
+            Analisis data teknikal saat ini:
+            - Harga Saat Ini: $${currentPrice}
+            - 5 Harga Terakhir: [${recentPrices}]
+            - EMA Fast (9): ${ema9.toFixed(2)}
+            - EMA Slow (21): ${ema21.toFixed(2)}
+            - RSI (14): ${rsi14.toFixed(2)}
+            - ATR (14): ${atr14.toFixed(2)}
 
-                await brainCol.updateOne({ id: "gold_brain" }, { $set: brain });
+            Aturan Analisis Singkat:
+            1. Periksa keselarasan Tren (EMA9 vs EMA21) dan Momentum (RSI).
+            2. Jika kondisi market sedang tidak jelas, terjadi pembalikan arah yang meragukan, volume rendah (ATR menyempit), atau RSI berada di area netral (45-55), Anda HARUS mengeluarkan sinyal "NEUTRAL". Jangan memaksakan Buy atau Sell jika tingkat keyakinan Anda di bawah 80%.
+            3. Tanggapan Anda WAJIB berupa JSON mentah dengan format tepat seperti ini:
+            {"signal": "BUY" atau "SELL" redundancy atau "NEUTRAL", "color": "#22c55e" untuk buy / "#ef4444" untuk sell / "#6b7280" untuk neutral, "reason": "Alasan analisis singkat maksimum 15 kata"}
+            `;
+
+            try {
+                const geminiRes = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+                    { contents: [{ parts: [{ text: promptText }] }] }
+                );
+                
+                const responseText = geminiRes.data.candidates[0].content.parts[0].text.trim();
+                // Bersihkan pembungkus markdown json jika ada
+                const cleanJson = responseText.replace(/```json|```/g, '');
+                const aiResult = JSON.parse(cleanJson);
+                
+                aiSignal = aiResult.signal || "NEUTRAL";
+                aiColor = aiResult.color || "#6b7280";
+                aiReason = aiResult.reason || "Analisis AI selesai.";
+            } catch (aiErr) {
+                console.error("Gagal memanggil Otak AI Gemini:", aiErr.message);
+                aiReason = "Koneksi AI terputus. Menggunakan mode aman (NEUTRAL).";
             }
         }
 
-        const recentPricesDoc = await priceCol.find().sort({ timestamp: -1 }).limit(50).toArray();
-        const priceSeries = recentPricesDoc.reverse().map(d => d.price);
+        // Formatisasi Jam WIB untuk tampilan tabel dashboard
+        const opsiWaktu = { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' };
+        const jamWIB = timestamp.toLocaleTimeString('id-ID', opsiWaktu) + " WIB";
 
-        const emaFastVal = calcEMA(priceSeries, brain.ema_fast);
-        const emaSlowVal = calcEMA(priceSeries, brain.ema_slow);
-        const rsiVal = calcRSI(priceSeries, brain.rsi_period);
-        const atrVal = calcATR(priceSeries, brain.rsi_period);
-
-        const upperDoom = emaFastVal + (atrVal * brain.doom_mult);
-        const lowerDoom = emaFastVal - (atrVal * brain.doom_mult);
-
-        let signal = 'NEUTRAL';
-        let color = '#6b7280';
-
-        if (emaFastVal > emaSlowVal && rsiVal > brain.rsi_buy_level && currentPrice > emaFastVal) {
-            signal = 'BUY 🟢'; color = '#10b981';
-        } else if (emaFastVal < emaSlowVal && rsiVal < brain.rsi_sell_level && currentPrice < emaFastVal) {
-            signal = 'SELL 🔴'; color = '#ef4444';
-        }
-
-        if (currentPrice > upperDoom) {
-            signal = 'DOOM SELL 🟠'; color = '#f97316';
-        } else if (currentPrice < lowerDoom) {
-            signal = 'DOOM BUY 🔵'; color = '#3b82f6';
-        }
-
-        const logData = {
-            time: timeNow,
-            price: currentPrice.toFixed(2),
-            signal: signal,
-            color: color,
-            ema9: emaFastVal.toFixed(2),
-            ema21: emaSlowVal.toFixed(2),
-            rsi14: rsiVal.toFixed(2),
-            atr14: atrVal.toFixed(2),
-            upperDoom: upperDoom.toFixed(2),
-            lowerDoom: lowerDoom.toFixed(2),
-            iteration: brain.total_errors,
-            timestamp: new Date()
+        // 5. Simpan Hasil Analisis Otak AI ke database Sinyal
+        const newSignal = {
+            timestamp,
+            timeStr: jamWIB,
+            closePrice: currentPrice.toFixed(2),
+            signal: aiSignal,
+            color: aiColor,
+            ema9: isNaN(ema9) ? "..." : ema9.toFixed(2),
+            ema21: isNaN(ema21) ? "..." : ema21.toFixed(2),
+            rsi14: isNaN(rsi14) ? "..." : rsi14.toFixed(2),
+            atr14: isNaN(atr14) ? "..." : atr14.toFixed(2),
+            upperDoom: isNaN(upperDoom) ? "..." : upperDoom.toFixed(2),
+            lowerDoom: isNaN(lowerDoom) ? "..." : lowerDoom.toFixed(2),
+            reason: aiReason
         };
-        await signalCol.insertOne(logData);
 
-        const totalSignals = await signalCol.countDocuments();
-        if (totalSignals > 100) {
-            const oldest = await signalCol.find().sort({ timestamp: 1 }).limit(totalSignals - 100).toArray();
-            await signalCol.deleteMany({ _id: { $in: oldest.map(d => d._id) } });
-        }
+        await signalCol.insertOne(newSignal);
 
-        res.json({ status: "success", wasError, updatedBrain: brain });
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.json({ status: "success", wasError: false, updatedBrain: newSignal });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ status: "error", wasError: true, msg: e.message });
     }
 };
