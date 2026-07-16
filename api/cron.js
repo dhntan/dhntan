@@ -1,9 +1,8 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
-// Menggunakan penamaan versi legasi standar Node.js
+// Menggunakan nama SDK resmi yang benar untuk Node.js
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Koneksi ke database asli
 const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 let cachedClient = null;
 
@@ -26,7 +25,7 @@ module.exports = async (req, res) => {
         const db = client.db('doomsday_bot');
         const signalCol = db.collection('signal_history_m15');
 
-        // 1. Ambil Harga Live dari Coinbase
+        // 1. Ambil Harga Live dari Coinbase awal yang sukses
         let livePrice = "0.00";
         try {
             const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
@@ -43,7 +42,7 @@ module.exports = async (req, res) => {
             minute: '2-digit' 
         }) + " WIB";
 
-        // Nilai indikator database (Mode awal stabil)
+        // Nilai indikator database awal stabil
         let ema9 = (parseFloat(livePrice) - 0.5).toFixed(2);
         let ema21 = (parseFloat(livePrice) + 4.0).toFixed(2);
         let rsi14 = "50.00";
@@ -51,13 +50,13 @@ module.exports = async (req, res) => {
         let upperDoom = (parseFloat(livePrice) + 15).toFixed(2);
         let lowerDoom = (parseFloat(livePrice) - 15).toFixed(2);
 
-        // 3. Proses Otak Gemini menggunakan SDK Versi Stabil
+        // 3. Proses Otak Gemini
         let aiSignal = "NEUTRAL";
         let aiColor = "#6b7280";
         let aiReason = "Menggunakan mode aman (Koneksi AI Terputus).";
 
         try {
-            if (GEMINI_API_KEY && GoogleGenerativeAI) {
+            if (GEMINI_API_KEY) {
                 // Inisialisasi menggunakan kelas bawaan paket versi stabil
                 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
                 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
@@ -78,7 +77,7 @@ module.exports = async (req, res) => {
                 if (parsedAi.color) aiColor = parsedAi.color;
                 if (parsedAi.reason) aiReason = parsedAi.reason;
             } else {
-                aiReason = "Modul SDK GoogleGenerativeAI tidak terdefinisi di Vercel.";
+                aiReason = "Modul API Key Gemini belum terpasang di Vercel.";
             }
         } catch (aiErr) {
             console.error("Gagal terhubung ke Otak AI Gemini:", aiErr.message);
