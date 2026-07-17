@@ -15,14 +15,13 @@ module.exports = async (req, res) => {
 
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         
-        // PENGGANTIAN UTAMA: Gunakan 'gemini-1.5-flash' TANPA prefix 'models/'
-        const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
+        // PENTING: Gunakan 'gemini-pro' tanpa prefix apa pun
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
         
-        const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON saja: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
+        const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         
         const result = await model.generateContent(prompt);
-        const text = result.response.text().replace(/```json|```/g, "");
-        const aiParsed = JSON.parse(text);
+        const aiParsed = JSON.parse(result.response.text().replace(/```json|```/g, ""));
 
         await db.collection('signal_history_m15').insertOne({
             timestamp: Date.now(),
@@ -31,9 +30,8 @@ module.exports = async (req, res) => {
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Data tersimpan", data: aiParsed });
+        res.status(200).json({ success: true, message: "Data tersimpan" });
     } catch (err) {
-        // Jika tetap error, ini akan memberi tahu kita alasan pastinya
         res.status(500).json({ success: false, error: err.message });
     }
 };
