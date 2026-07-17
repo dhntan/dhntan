@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
 
         // 2. Kirim prompt ke OpenRouter (Model Gemini 1.5 Flash)
         const aiResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-           "model": "google/gemini-1.5-flash",
+           "model": "google/gemini-1.5-flash-8b",
             "messages": [{ 
                 "role": "user", 
                 "content": `Analisis XAUUSD harga ${livePrice}. Berikan jawaban dalam format JSON murni saja: {"signal": "BUY/SELL/HOLD", "color": "#10b981", "reason": "alasan singkat"}` 
