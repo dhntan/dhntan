@@ -14,10 +14,10 @@ module.exports = async (req, res) => {
         const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         const livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
 
-        // 2. Inisialisasi Gemini dengan format yang benar agar tidak 404
+        // 2. Inisialisasi Gemini dengan model standar yang umum didukung
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        // Menggunakan prefix 'models/' untuk menghindari error 404 pada SDK v1
-        const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-flash" });
+        // Menggunakan "gemini-pro" yang lebih stabil untuk banyak tipe API Key
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); 
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON saja: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         const result = await model.generateContent(prompt);
