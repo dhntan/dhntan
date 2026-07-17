@@ -1,33 +1,60 @@
 const { MongoClient } = require('mongodb');
 const axios = require('axios');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const uri = "mongodb+srv://dhntan_db_user:TGHjfpbbNVdLUUXZ@cluster0.h9h6cvs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Konfigurasi koneksi database
+const uri = process.env.MONGODB_URI; // Pastikan ini sudah terisi di Vercel Env
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 module.exports = async (req, res) => {
+    // Hanya izinkan metode GET untuk cron job
+    if (req.method !== 'GET') {
+        return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    let client;
     try {
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        
-        // Menggunakan model default 'gemini-1.5-flash' dengan cara paling sederhana
-        // Jika ini masih 404, berarti API Key ini dibatasi aksesnya oleh Google
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        
+        // 1. Ambil harga live XAUUSD
         const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         const livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
-        
-        const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
-        const result = await model.generateContent(prompt);
-        const aiParsed = JSON.parse(result.response.text().replace(/```json|```/g, ""));
 
-        const client = await new MongoClient(uri).connect();
-        await client.db('doomsday_bot').collection('signal_history_m15').insertOne({
-            timestamp: Date.now(),
+        // 2. Kirim prompt ke OpenRouter (Model Gemini 1.5 Flash)
+        const aiResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+            "model": "google/gemini-flash-1.5",
+            "messages": [{ 
+                "role": "user", 
+                "content": `Analisis XAUUSD harga ${livePrice}. Berikan jawaban dalam format JSON murni saja: {"signal": "BUY/SELL/HOLD", "color": "#10b981", "reason": "alasan singkat"}` 
+            }]
+        }, {
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "HTTP-Referer": "https://vercel.com/", 
+                "X-Title": "Bot Emas Dhany"
+            }
+        });
+
+        // 3. Parsing JSON dari jawaban AI
+        const rawContent = aiResponse.data.choices[0].message.content;
+        const aiParsed = JSON.parse(rawContent.replace(/```json|```/g, ""));
+
+        // 4. Simpan ke MongoDB
+        client = await new MongoClient(uri).connect();
+        const db = client.db('doomsday_bot');
+        await db.collection('signal_history_m15').insertOne({
+            timestamp: new Date(),
+            price: livePrice,
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Sukses" });
+        res.status(200).json({ success: true, data: aiParsed });
+
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        console.error("Error Detail:", err.response ? err.response.data : err.message);
+        res.status(500).json({ 
+            success: false, 
+            error: err.message,
+            details: err.response ? err.response.data : "No extra info" 
+        });
+    } finally {
+        if (client) await client.close();
     }
 };
