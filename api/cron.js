@@ -15,8 +15,8 @@ module.exports = async (req, res) => {
 
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         
-        // PENTING: Gunakan 'gemini-pro' tanpa prefix apa pun
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        // PENGGANTIAN UTAMA: Menggunakan versi spesifik 001
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Data tersimpan" });
+        res.status(200).json({ success: true, message: "Berhasil" });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
