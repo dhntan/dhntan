@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
 
         // 2. Inisialisasi Gemini dengan benar
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         const result = await model.generateContent(prompt);
