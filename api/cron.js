@@ -14,11 +14,12 @@ module.exports = async (req, res) => {
         const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         const livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
 
-        // 2. Inisialisasi Gemini dengan benar
+        // 2. Inisialisasi Gemini dengan format yang benar agar tidak 404
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); 
+        // Menggunakan prefix 'models/' untuk menghindari error 404 pada SDK v1
+        const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-flash" });
         
-        const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
+        const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON saja: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         const result = await model.generateContent(prompt);
         const text = result.response.text().replace(/```json|```/g, "");
         const aiParsed = JSON.parse(text);
@@ -26,13 +27,14 @@ module.exports = async (req, res) => {
         // 3. Simpan ke DB
         await db.collection('signal_history_m15').insertOne({
             timestamp: Date.now(),
-            timeStr: new Date().toLocaleTimeString('id-ID'),
+            timeStr: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }),
             closePrice: livePrice,
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Data tersimpan" });
+        res.status(200).json({ success: true, message: "Data tersimpan sukses", data: aiParsed });
     } catch (err) {
+        console.error("Error Cron:", err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 };
