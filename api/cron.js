@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         
         // PENGGANTIAN UTAMA: Gunakan 'gemini-1.5-flash' TANPA prefix 'models/'
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON saja: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
         
