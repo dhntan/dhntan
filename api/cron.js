@@ -10,21 +10,20 @@ module.exports = async (req, res) => {
         const client = await new MongoClient(uri).connect();
         const db = client.db('doomsday_bot');
         
-        // 1. Ambil harga live
         const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         const livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
 
-        // 2. Inisialisasi Gemini dengan model standar yang umum didukung
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        // Menggunakan "gemini-pro" yang lebih stabil untuk banyak tipe API Key
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); 
+        
+        // PENGGANTIAN UTAMA: Gunakan 'gemini-1.5-flash' TANPA prefix 'models/'
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON saja: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
+        
         const result = await model.generateContent(prompt);
         const text = result.response.text().replace(/```json|```/g, "");
         const aiParsed = JSON.parse(text);
 
-        // 3. Simpan ke DB
         await db.collection('signal_history_m15').insertOne({
             timestamp: Date.now(),
             timeStr: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }),
@@ -32,9 +31,9 @@ module.exports = async (req, res) => {
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Data tersimpan sukses", data: aiParsed });
+        res.status(200).json({ success: true, message: "Data tersimpan", data: aiParsed });
     } catch (err) {
-        console.error("Error Cron:", err.message);
+        // Jika tetap error, ini akan memberi tahu kita alasan pastinya
         res.status(500).json({ success: false, error: err.message });
     }
 };
