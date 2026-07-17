@@ -7,30 +7,26 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 module.exports = async (req, res) => {
     try {
-        const client = await new MongoClient(uri).connect();
-        const db = client.db('doomsday_bot');
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        
+        // Menggunakan model default 'gemini-1.5-flash' dengan cara paling sederhana
+        // Jika ini masih 404, berarti API Key ini dibatasi aksesnya oleh Google
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         
         const cbRes = await axios.get('https://api.coinbase.com/v2/prices/PAXG-USD/spot');
         const livePrice = parseFloat(cbRes.data.data.amount).toFixed(2);
-
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        
-        // PENGGANTIAN UTAMA: Menggunakan versi spesifik 001
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         
         const prompt = `Analisis XAUUSD harga ${livePrice}. Berikan JSON: {"signal": "BUY", "color": "#10b981", "reason": "alasan"}`;
-        
         const result = await model.generateContent(prompt);
         const aiParsed = JSON.parse(result.response.text().replace(/```json|```/g, ""));
 
-        await db.collection('signal_history_m15').insertOne({
+        const client = await new MongoClient(uri).connect();
+        await client.db('doomsday_bot').collection('signal_history_m15').insertOne({
             timestamp: Date.now(),
-            timeStr: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }),
-            closePrice: livePrice,
             ...aiParsed
         });
 
-        res.status(200).json({ success: true, message: "Berhasil" });
+        res.status(200).json({ success: true, message: "Sukses" });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
